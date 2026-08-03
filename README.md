@@ -37,6 +37,23 @@ For spreadsheets that depend on drawings, embedded pictures, or charts, export
 the workbook to PDF first. PDF input includes page images, while spreadsheet
 input focuses on cell data and reads up to the first 1,000 rows of each sheet.
 
+### Local GPT development test
+
+1. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`.
+2. Add your API key to the local `OPENAI_API_KEY` value. The real secrets file
+   is ignored by Git; do not add the key to `config.yaml`.
+3. Run the safe synthetic end-to-end test:
+
+   ```powershell
+   .\.venv\Scripts\python.exe scripts\dev_gpt_smoke.py
+   ```
+
+The command makes one GPT request, validates the editable event rows, and runs
+the SIAO and OCS/SAFTI booking functions locally. Results are written to
+`outputs/dev_gpt_smoke/`, which is also ignored by Git. To intentionally test a
+real plan instead, add `--input "C:\path\to\training-plan.pdf"`; that selected
+file will be sent to OpenAI.
+
 ## Conduct catalogue
 
 Timetable naming rules are stored in `ocs/conduct_catalog.yaml` rather than in a
