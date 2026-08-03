@@ -14,9 +14,17 @@ import pandas as pd
 import yaml
 from streamlit_cookies_manager import EncryptedCookieManager
 
+from ai_ingestion import (
+    DEFAULT_AI_MODEL,
+    EVENT_COLUMNS,
+    extract_training_plan_with_ai,
+    validate_reviewed_events,
+)
 from app_services import (
     generate_bookings,
+    generate_bookings_from_events,
     generate_siao,
+    generate_siao_from_events,
     load_editable_conduct_catalog,
     resolve_configured_path,
     save_editable_conduct_catalog,
@@ -94,6 +102,18 @@ def stage_uploaded_file(setting_key: str, uploaded_file) -> Path:
 
 def download_mime_type(path: Path) -> str:
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def deployment_secret(name: str, default: str = "") -> str:
+    """Read a deployment secret without putting it into browser configuration."""
+    environment_value = os.environ.get(name)
+    if environment_value:
+        return environment_value
+    try:
+        value = st.secrets.get(name, default)
+    except (FileNotFoundError, KeyError):
+        value = default
+    return str(value or default)
 
 
 def catalogue_to_frame(catalog: dict[str, Any]) -> pd.DataFrame:
@@ -189,13 +209,164 @@ with st.sidebar:
     st.caption("Planning automation")
     page = st.radio(
         "Workspace",
-        ["SIAO generator", "Facility booking", "Conduct catalogue", "Settings"],
+        ["AI TP reader", "SIAO generator", "Facility booking", "Conduct catalogue", "Settings"],
         label_visibility="collapsed",
     )
     st.divider()
     st.caption("Settings are kept in this browser only.")
 
-if page == "SIAO generator":
+if page == "AI TP reader":
+    st.markdown('<div class="eyebrow">Flexible ingestion</div>', unsafe_allow_html=True)
+    st.title("Read flexible training-plan layouts")
+    st.markdown(
+        '<div class="lede">Upload a spreadsheet, PDF, or scan. AI converts visual boxes and unfamiliar layouts into one editable event table before anything reaches SIAO or booking generation.</div>',
+        unsafe_allow_html=True,
+    )
+    st.warning(
+        "The uploaded plan is sent to OpenAI for document understanding. Do not use this feature if your information-handling policy prohibits third-party cloud processing. Always review the extracted table."
+    )
+
+    ai_api_key = deployment_secret("OPENAI_API_KEY")
+    ai_model = deployment_secret("OPENAI_MODEL", DEFAULT_AI_MODEL)
+    ai_upload = st.file_uploader(
+        "Training plan",
+        type=["pdf", "png", "jpg", "jpeg", "webp", "gif", "csv", "tsv", "xlsx", "xls", "xlsm"],
+        key="ai_training_plan_upload",
+        help="Maximum 50 MB. PDFs may contain scans, pictures, or visual timetable boxes.",
+    )
+    st.caption("If a spreadsheet relies on drawings or embedded images, export it to PDF first so the visual layout is included.")
+
+    ai_source_path = None
+    if ai_upload is not None:
+        upload_signature = hashlib.sha256(ai_upload.getvalue()).hexdigest()
+        if st.session_state.get("ai_source_signature") != upload_signature:
+            st.session_state.ai_source_signature = upload_signature
+            for state_key in (
+                "ai_extraction",
+                "ai_event_editor",
+                "approved_ai_events",
+                "approved_ai_events_hash",
+                "siao_result",
+                "siao_result_cadet_size",
+                "booking_result",
+            ):
+                st.session_state.pop(state_key, None)
+        ai_source_path = stage_uploaded_file("ai_input_data", ai_upload)
+
+    if not ai_api_key:
+        st.info(
+            'Add `OPENAI_API_KEY = "..."` to Streamlit Community Cloud Secrets. The key is never stored in config.yaml or browser cookies.'
+        )
+
+    if st.button(
+        "Extract editable schedule with AI",
+        type="primary",
+        disabled=ai_source_path is None or not ai_api_key,
+        use_container_width=True,
+    ):
+        for state_key in (
+            "ai_extraction",
+            "ai_event_editor",
+            "approved_ai_events",
+            "approved_ai_events_hash",
+            "siao_result",
+            "siao_result_cadet_size",
+            "booking_result",
+        ):
+            st.session_state.pop(state_key, None)
+        extraction = run_action(
+            lambda: extract_training_plan_with_ai(
+                ai_source_path,
+                api_key=ai_api_key,
+                model=ai_model,
+            ),
+            "AI extraction completed. Review every row below.",
+        )
+        if extraction:
+            st.session_state.ai_extraction = extraction
+            st.session_state.pop("ai_event_editor", None)
+
+    if extraction := st.session_state.get("ai_extraction"):
+        title_col, model_col, event_col = st.columns([2, 1, 1])
+        title_col.metric("Document", extraction.get("document_title") or "Untitled")
+        model_col.metric("Model", extraction.get("model") or ai_model)
+        event_col.metric("Events", len(extraction["events"]))
+        for warning in extraction.get("warnings", []):
+            st.warning(warning)
+
+        st.subheader("Review and edit")
+        st.caption("Correct uncertain text, dates, times, conducts, and locations. Add or delete rows as needed.")
+        edited_events = st.data_editor(
+            extraction["events"],
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key="ai_event_editor",
+            column_order=EVENT_COLUMNS,
+            column_config={
+                "date": st.column_config.TextColumn("Date · YYYY-MM-DD", required=True),
+                "start_time": st.column_config.TextColumn("Start · HH:MM", required=True),
+                "end_time": st.column_config.TextColumn("End · HH:MM", required=True),
+                "conduct": st.column_config.TextColumn("Conduct", required=True, width="large"),
+                "location": st.column_config.TextColumn("Location", width="medium"),
+                "remarks": st.column_config.TextColumn("Remarks", width="large"),
+                "source_reference": st.column_config.TextColumn("Source", disabled=True),
+                "confidence": st.column_config.NumberColumn("Confidence", min_value=0.0, max_value=1.0, format="%.2f", disabled=True),
+                "needs_review": st.column_config.CheckboxColumn("Review"),
+            },
+        )
+        cleaned_events, event_errors, event_warnings = validate_reviewed_events(edited_events)
+        review_hash = hashlib.sha256(cleaned_events.to_csv(index=False).encode("utf-8")).hexdigest()
+        if (
+            st.session_state.get("approved_ai_events_hash")
+            and st.session_state.approved_ai_events_hash != review_hash
+        ):
+            st.session_state.pop("approved_ai_events", None)
+            st.session_state.pop("approved_ai_events_hash", None)
+            st.session_state.pop("siao_result", None)
+            st.session_state.pop("siao_result_cadet_size", None)
+            st.session_state.pop("booking_result", None)
+            st.info("The table changed. Approve it again before generating outputs.")
+
+        if event_errors:
+            st.error("Resolve these issues before approval:\n\n- " + "\n- ".join(event_errors))
+        for warning in event_warnings:
+            st.warning(warning)
+
+        approve_col, download_col = st.columns(2)
+        with approve_col:
+            if st.button(
+                "Approve and use this schedule",
+                type="primary",
+                disabled=bool(event_errors),
+                use_container_width=True,
+            ):
+                st.session_state.approved_ai_events = cleaned_events.copy()
+                st.session_state.approved_ai_events_hash = review_hash
+                st.session_state.pop("siao_result", None)
+                st.session_state.pop("siao_result_cadet_size", None)
+                st.session_state.pop("booking_result", None)
+                st.success("Approved. SIAO and Facility booking will now use this reviewed table.")
+        with download_col:
+            st.download_button(
+                "Download reviewed events CSV",
+                cleaned_events.to_csv(index=False).encode("utf-8-sig"),
+                file_name="reviewed_training_plan.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+        if "approved_ai_events" in st.session_state:
+            st.success(f"AI-reviewed schedule active · {len(st.session_state.approved_ai_events)} events")
+            if st.button("Stop using this AI schedule", use_container_width=True):
+                st.session_state.pop("approved_ai_events", None)
+                st.session_state.pop("approved_ai_events_hash", None)
+                st.session_state.pop("siao_result", None)
+                st.session_state.pop("siao_result_cadet_size", None)
+                st.session_state.pop("booking_result", None)
+                st.rerun()
+
+elif page == "SIAO generator":
     st.markdown('<div class="eyebrow">SIAO generator</div>', unsafe_allow_html=True)
     st.title("Build the draft in one pass")
     st.markdown(
@@ -206,13 +377,29 @@ if page == "SIAO generator":
     left, right = st.columns([1, 1.45], gap="large")
     with left:
         cadet_size = st.number_input("Cadet strength", min_value=1, max_value=2000, value=120, step=1)
+        if (
+            "siao_result" in st.session_state
+            and st.session_state.get("siao_result_cadet_size") != int(cadet_size)
+        ):
+            st.session_state.pop("siao_result", None)
+            st.session_state.pop("siao_result_cadet_size", None)
+        approved_events = st.session_state.get("approved_ai_events")
+        if isinstance(approved_events, pd.DataFrame):
+            st.info(f"Using approved AI-readable schedule · {len(approved_events)} events")
         if st.button("Generate SIAO draft", type="primary", use_container_width=True):
+            st.session_state.pop("siao_result", None)
+            st.session_state.pop("siao_result_cadet_size", None)
             result = run_action(
-                lambda: generate_siao(config, int(cadet_size)),
+                lambda: (
+                    generate_siao_from_events(config, approved_events, int(cadet_size))
+                    if isinstance(approved_events, pd.DataFrame)
+                    else generate_siao(config, int(cadet_size))
+                ),
                 "Your SIAO draft is ready.",
             )
             if result:
                 st.session_state.siao_result = result
+                st.session_state.siao_result_cadet_size = int(cadet_size)
 
     with right:
         st.markdown(
@@ -275,8 +462,19 @@ elif page == "Facility booking":
         unsafe_allow_html=True,
     )
 
+    approved_events = st.session_state.get("approved_ai_events")
+    if isinstance(approved_events, pd.DataFrame):
+        st.info(f"Using approved AI-readable schedule · {len(approved_events)} events")
     if st.button("Generate booking draft", type="primary"):
-        result = run_action(lambda: generate_bookings(config), "Booking draft generated.")
+        st.session_state.pop("booking_result", None)
+        result = run_action(
+            lambda: (
+                generate_bookings_from_events(config, approved_events)
+                if isinstance(approved_events, pd.DataFrame)
+                else generate_bookings(config)
+            ),
+            "Booking draft generated.",
+        )
         if result:
             st.session_state.booking_result = result
 
@@ -357,6 +555,7 @@ elif page == "Conduct catalogue":
             )
             if saved_path:
                 st.session_state.pop("siao_result", None)
+                st.session_state.pop("siao_result_cadet_size", None)
     with download_col:
         st.download_button(
             "Download catalogue YAML",
@@ -377,6 +576,7 @@ else:
 
     st.subheader("Automation files")
     st.caption("Drop a replacement file into a card or browse your device. The selected copy is used for this session.")
+    st.caption("For a PDF, scan, image, or unfamiliar layout, use AI TP reader and approve its editable table.")
     managed_files = (
         ("input_data", "Training plan input - Commonly referred as TP", ["csv", "xlsx", "xlsm", "xls"]),
         ("lesson_plan", "Lesson plan input - Please add in required lesson plans and reupload", ["csv"]),
@@ -394,11 +594,27 @@ else:
                 label_visibility="collapsed",
             )
             if uploaded is not None:
+                previous_path = str(nested_get(config, ("paths", key)))
                 staged_path = stage_uploaded_file(key, uploaded)
                 updated_config = copy.deepcopy(config)
                 nested_set(updated_config, ("paths", key), str(staged_path))
                 st.session_state.app_config = updated_config
                 config = updated_config
+                if str(staged_path) != previous_path:
+                    if key == "input_data":
+                        for state_key in (
+                            "ai_extraction",
+                            "ai_event_editor",
+                            "approved_ai_events",
+                            "approved_ai_events_hash",
+                            "siao_result",
+                            "siao_result_cadet_size",
+                            "booking_result",
+                        ):
+                            st.session_state.pop(state_key, None)
+                    elif key in {"lesson_plan", "siao_template", "conduct_catalog"}:
+                        st.session_state.pop("siao_result", None)
+                        st.session_state.pop("siao_result_cadet_size", None)
                 st.success(f"Selected: {Path(uploaded.name).name}")
         with download_col:
             configured_path = resolve_configured_path(nested_get(config, ("paths", key)))
@@ -447,6 +663,7 @@ else:
 
     if save:
         st.session_state.app_config = edited
+        st.session_state.pop("booking_result", None)
         cookies[COOKIE_KEY] = yaml.safe_dump(edited, sort_keys=False)
         cookies.save()
         st.success("Settings saved in this browser.")
@@ -455,6 +672,16 @@ else:
     with reset_col:
         if st.button("Reset to config.yaml", use_container_width=True):
             st.session_state.app_config = copy.deepcopy(default_config)
+            for state_key in (
+                "ai_extraction",
+                "ai_event_editor",
+                "approved_ai_events",
+                "approved_ai_events_hash",
+                "siao_result",
+                "siao_result_cadet_size",
+                "booking_result",
+            ):
+                st.session_state.pop(state_key, None)
             cookies[COOKIE_KEY] = yaml.safe_dump(default_config, sort_keys=False)
             cookies.save()
             st.rerun()
