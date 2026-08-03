@@ -1,0 +1,312 @@
+version: 1
+conducts:
+- conduct_id: strength_training
+  lesson_plan_name: STRENGTH TRAINING
+  display_name: STRENGTH TRAINING
+  use_display_name: false
+  aliases:
+  - Strength Training
+  - ST
+  - S&P
+  exclusions:
+  - ST Preparation
+  - ST Dispersal
+  - Closing
+  priority: 10
+  multi_day: false
+  active: true
+- conduct_id: interval_fast_march
+  lesson_plan_name: INTERVAL FAST MARCH
+  display_name: INTERVAL FAST MARCH
+  use_display_name: false
+  aliases:
+  - Interval Fast March
+  - IFM
+  exclusions:
+  - Prep
+  priority: 20
+  multi_day: false
+  active: true
+- conduct_id: ex_relentless
+  lesson_plan_name: EX.RELENTLESS
+  display_name: EX.RELENTLESS
+  use_display_name: false
+  aliases:
+  - Relentless
+  - XRW
+  exclusions:
+  - Brief
+  - Prep
+  - Inspection
+  - SDL
+  - Coaching
+  - Chat
+  - Fireside
+  priority: 30
+  multi_day: true
+  active: true
+  exercise_display_name: Ex. Relentless Warrior
+- conduct_id: m203_live_firing
+  lesson_plan_name: M203 L/F
+  display_name: M203 L/F
+  use_display_name: false
+  aliases:
+  - M203
+  exclusions:
+  - THT
+  - F2F
+  - Theory
+  - Test
+  - SDL
+  - PTCO
+  - Pengun
+  - MAT
+  - GPMG
+  - IGTS
+  - Brief
+  - Inspection
+  priority: 40
+  multi_day: false
+  active: true
+- conduct_id: mat_live_firing
+  lesson_plan_name: MAT / M203 LIVE FIRING
+  display_name: MAT / M203 LIVE FIRING
+  use_display_name: false
+  aliases:
+  - MAT
+  - MATADOR
+  exclusions:
+  - THT
+  - F2F
+  - Theory
+  - Test
+  - SDL
+  - PTCO
+  - Pengun
+  - IGTS
+  priority: 50
+  multi_day: false
+  active: true
+- conduct_id: gpmg_live_firing
+  lesson_plan_name: GPMG L/F
+  display_name: GPMG L/F
+  use_display_name: false
+  aliases:
+  - GPMG
+  exclusions:
+  - THT
+  - F2F
+  - Theory
+  - Test
+  - SDL
+  - PTCO
+  - Pengun
+  - MAT
+  - M203
+  - IGTS
+  - Brief
+  - Inspection
+  priority: 60
+  multi_day: false
+  active: true
+- conduct_id: xaw
+  lesson_plan_name: XAW
+  display_name: XAW
+  use_display_name: false
+  aliases:
+  - XAW
+  - Adaptive Warrior
+  - Harbouring Routine
+  - UO Drills
+  - PTCO
+  - Compass
+  - Pengun
+  exclusions:
+  - Prep
+  - Inspection
+  - SDL
+  - Brief
+  - Chat
+  - Calibration
+  - Fireside
+  - JVLF
+  priority: 70
+  multi_day: true
+  active: true
+  exercise_display_name: Ex Adaptive Warrior
+- conduct_id: distance_interval
+  lesson_plan_name: DISTANCE INTERVAL
+  display_name: DISTANCE INTERVAL
+  use_display_name: false
+  aliases:
+  - Distance Interval
+  exclusions: []
+  priority: 80
+  multi_day: false
+  active: true
+- conduct_id: metabolic_circuit
+  lesson_plan_name: METABOLIC CIRCUIT
+  display_name: METABOLIC CIRCUIT
+  use_display_name: false
+  aliases:
+  - Metabolic Circuit
+  exclusions:
+  - Prep
+  priority: 90
+  multi_day: false
+  active: true
+- conduct_id: endurance_run_30_min
+  lesson_plan_name: ENDURANCE RUN - 30 MIN
+  display_name: ENDURANCE RUN - 30 MIN
+  use_display_name: false
+  aliases:
+  - Endurance Run
+  exclusions:
+  - Prep
+  priority: 100
+  multi_day: false
+  active: true
+- conduct_id: combat_circuit
+  lesson_plan_name: COMBAT CIRCUIT
+  display_name: COMBAT CIRCUIT
+  use_display_name: false
+  aliases:
+  - Combat Circuit
+  exclusions:
+  - Prep
+  priority: 110
+  multi_day: false
+  active: true
+- conduct_id: ippt
+  lesson_plan_name: IPPT
+  display_name: IPPT
+  use_display_name: false
+  aliases:
+  - IPPT
+  exclusions: []
+  priority: 120
+  multi_day: false
+  active: true
+- conduct_id: ne_tour
+  lesson_plan_name: NE TOUR
+  display_name: NE TOUR
+  use_display_name: false
+  aliases:
+  - NE TOUR
+  - NE VISIT
+  exclusions: []
+  priority: 130
+  multi_day: false
+  active: true
+- conduct_id: army_combat_fitness_check
+  lesson_plan_name: ARMY COMBAT FITNESS CHECK
+  display_name: ARMY COMBAT FITNESS CHECK
+  use_display_name: false
+  aliases:
+  - Army Combat Fitness Check
+  - ACFC
+  exclusions: []
+  priority: 140
+  multi_day: false
+  active: true
+- conduct_id: demolition_tht
+  lesson_plan_name: DEMOLITION THT
+  display_name: DEMOLITION THT
+  use_display_name: false
+  aliases:
+  - Demolition
+  - THT
+  - Practical
+  exclusions:
+  - F2F
+  - SDL
+  - Clarification
+  - Chat
+  - M203
+  - MAT
+  - GPMG
+  - LMG
+  - EX
+  - Exercise
+  priority: 150
+  multi_day: false
+  active: true
+- conduct_id: mat_m203_igts
+  lesson_plan_name: MAT/M203 IGTS
+  display_name: MAT/M203 IGTS
+  use_display_name: false
+  aliases:
+  - IGTS
+  - MATADOR IGTS
+  - MAT/M203 IGTS
+  exclusions:
+  - L/F
+  - THT
+  - F2F
+  - Theory
+  - Test
+  - SDL
+  - PTCO
+  - Pengun
+  - LMG
+  - GPMG
+  priority: 160
+  multi_day: false
+  active: true
+- conduct_id: ex_hunter
+  lesson_plan_name: Ex. HUNTER
+  display_name: Ex. HUNTER
+  use_display_name: false
+  aliases:
+  - EX HUNTER
+  - HUNTER
+  - Ex. HUNTER
+  exclusions:
+  - Recce
+  - Chat
+  - Prep
+  - Inspection
+  - SDL
+  - Brief
+  - Calibration
+  - Fireside
+  - JVLF
+  priority: 170
+  multi_day: false
+  active: true
+- conduct_id: ex_cougar
+  lesson_plan_name: Ex. COUGAR
+  display_name: Ex. COUGAR
+  use_display_name: false
+  aliases:
+  - EX COUGAR
+  - COUGAR
+  - Ex. COUGAR
+  exclusions:
+  - Recce
+  - Chat
+  - Prep
+  - Inspection
+  - SDL
+  - Brief
+  - Calibration
+  - Fireside
+  - JVLF
+  - Rehearsals
+  priority: 180
+  multi_day: false
+  active: false
+recce_rules:
+- lesson_plan_name: XAW RECCE
+  aliases:
+  - XAW
+  - Adaptive Warrior
+- lesson_plan_name: XRW RECCE
+  aliases:
+  - XRW
+  - RELENTLESS
+  - Relentless Warrior
+- lesson_plan_name: Ex. HUNTER RECCE
+  aliases:
+  - HUNTER
+  - Hunter

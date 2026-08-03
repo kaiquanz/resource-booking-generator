@@ -1,0 +1,36 @@
+# Python and local environments
+__pycache__/
+*.py[cod]
+.venv/
+143/
+
+# Generated and verification artifacts
+outputs/
+_verification/
+regions/
+resources/
+draft_siao.csv
+extracted_data_lesson.csv
+extracted_lesson.csv
+mapping.csv
+lesson_plan.csv
+SIAO - (Fill In) SIAO.csv
+test*.csv
+transposed_data_test*.csv
+ocs/booking_details.csv
+ocs/ocs_booking.csv
+ocs/transposed_data_test*.csv
+ocs/process_image.py
+ocs/sh/
+requirements.legacy.txt
+
+# Local logs and secrets
+*.log
+.streamlit/secrets.toml
+ocs/config.local.yaml
+
+# Operational workbooks are private by default; allow only the public template
+*.xlsx
+*.xlsm
+*.xls
+!ocs/template_siao.xlsx

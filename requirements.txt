@@ -1,0 +1,10 @@
+numpy==2.4.6
+pandas==3.0.3
+python-dateutil==2.9.0.post0
+six==1.17.0
+tzdata==2026.2
+openpyxl>=3.1,<4
+xlrd>=2,<3
+PyYAML>=6,<7
+streamlit>=1.45,<2
+streamlit-cookies-manager>=0.2.0,<1

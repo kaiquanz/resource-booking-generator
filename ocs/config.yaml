@@ -1,0 +1,67 @@
+paths:
+  lesson_plan: "SIAO - Lesson Plan.csv"
+  siao_template: "ocs/template_siao.xlsx"
+  input_data: ""
+  output_folder: "outputs"
+  conduct_catalog: "ocs/conduct_catalog.yaml"
+
+user:
+  email: ""
+
+gmail:
+  address: ""
+  app_password: ""
+
+google_form:
+  url: ""
+
+  fields:
+    facility:
+      id: ""
+      type: "text"
+      default: ""
+
+    start_date:
+      id: ""
+      type: "text"
+      default: ""
+
+    end_date:
+      id: ""
+      type: "text"
+      default: ""
+
+    start_time:
+      id: ""
+      type: "time"
+      default: ""
+
+    end_time:
+      id: ""
+      type: "time"
+      default: ""
+
+    department:
+      id: ""
+      type: "text"
+      default: "TWG"
+
+    rank:
+      id: ""
+      type: "text"
+      default: ""
+
+    name:
+      id: ""
+      type: "text"
+      default: ""
+
+    contact_number:
+      id: ""
+      type: "text"
+      default: ""
+
+    remarks:
+      id: ""
+      type: "text"
+      default: ""
