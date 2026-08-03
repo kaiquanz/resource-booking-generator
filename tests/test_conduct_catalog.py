@@ -32,6 +32,11 @@ class ConductCatalogTests(unittest.TestCase):
         conduct_ids = [rule["conduct_id"] for rule in self.catalog["conducts"]]
         self.assertEqual(len(conduct_ids), len(set(conduct_ids)))
 
+    def test_catalog_does_not_require_manual_priority(self):
+        self.assertTrue(
+            all("priority" not in rule for rule in self.catalog["conducts"])
+        )
+
     def test_local_alias_maps_to_stable_lesson_plan_target(self):
         catalog = copy.deepcopy(self.catalog)
         hunter = next(

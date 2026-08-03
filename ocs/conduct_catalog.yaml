@@ -12,7 +12,6 @@ conducts:
   - ST Preparation
   - ST Dispersal
   - Closing
-  priority: 10
   multi_day: false
   active: true
 - conduct_id: interval_fast_march
@@ -24,7 +23,6 @@ conducts:
   - IFM
   exclusions:
   - Prep
-  priority: 20
   multi_day: false
   active: true
 - conduct_id: ex_relentless
@@ -42,7 +40,6 @@ conducts:
   - Coaching
   - Chat
   - Fireside
-  priority: 30
   multi_day: true
   active: true
   exercise_display_name: Ex. Relentless Warrior
@@ -65,7 +62,6 @@ conducts:
   - IGTS
   - Brief
   - Inspection
-  priority: 40
   multi_day: false
   active: true
 - conduct_id: mat_live_firing
@@ -84,7 +80,6 @@ conducts:
   - PTCO
   - Pengun
   - IGTS
-  priority: 50
   multi_day: false
   active: true
 - conduct_id: gpmg_live_firing
@@ -106,7 +101,6 @@ conducts:
   - IGTS
   - Brief
   - Inspection
-  priority: 60
   multi_day: false
   active: true
 - conduct_id: xaw
@@ -130,7 +124,6 @@ conducts:
   - Calibration
   - Fireside
   - JVLF
-  priority: 70
   multi_day: true
   active: true
   exercise_display_name: Ex Adaptive Warrior
@@ -141,7 +134,6 @@ conducts:
   aliases:
   - Distance Interval
   exclusions: []
-  priority: 80
   multi_day: false
   active: true
 - conduct_id: metabolic_circuit
@@ -152,7 +144,6 @@ conducts:
   - Metabolic Circuit
   exclusions:
   - Prep
-  priority: 90
   multi_day: false
   active: true
 - conduct_id: endurance_run_30_min
@@ -163,7 +154,6 @@ conducts:
   - Endurance Run
   exclusions:
   - Prep
-  priority: 100
   multi_day: false
   active: true
 - conduct_id: combat_circuit
@@ -174,7 +164,6 @@ conducts:
   - Combat Circuit
   exclusions:
   - Prep
-  priority: 110
   multi_day: false
   active: true
 - conduct_id: ippt
@@ -184,7 +173,6 @@ conducts:
   aliases:
   - IPPT
   exclusions: []
-  priority: 120
   multi_day: false
   active: true
 - conduct_id: ne_tour
@@ -195,7 +183,6 @@ conducts:
   - NE TOUR
   - NE VISIT
   exclusions: []
-  priority: 130
   multi_day: false
   active: true
 - conduct_id: army_combat_fitness_check
@@ -206,7 +193,6 @@ conducts:
   - Army Combat Fitness Check
   - ACFC
   exclusions: []
-  priority: 140
   multi_day: false
   active: true
 - conduct_id: demolition_tht
@@ -228,7 +214,6 @@ conducts:
   - LMG
   - EX
   - Exercise
-  priority: 150
   multi_day: false
   active: true
 - conduct_id: mat_m203_igts
@@ -250,7 +235,6 @@ conducts:
   - Pengun
   - LMG
   - GPMG
-  priority: 160
   multi_day: false
   active: true
 - conduct_id: ex_hunter
@@ -271,7 +255,6 @@ conducts:
   - Calibration
   - Fireside
   - JVLF
-  priority: 170
   multi_day: false
   active: true
 - conduct_id: ex_cougar
@@ -293,7 +276,6 @@ conducts:
   - Fireside
   - JVLF
   - Rehearsals
-  priority: 180
   multi_day: false
   active: false
 recce_rules:

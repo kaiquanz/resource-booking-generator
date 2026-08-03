@@ -107,7 +107,6 @@ def catalogue_to_frame(catalog: dict[str, Any]) -> pd.DataFrame:
             "use_display_name": bool(rule.get("use_display_name", False)),
             "aliases": "\n".join(str(value) for value in rule.get("aliases", [])),
             "exclusions": "\n".join(str(value) for value in rule.get("exclusions", [])),
-            "priority": int(rule.get("priority", 1000)),
             "multi_day": bool(rule.get("multi_day", False)),
             "exercise_display_name": rule.get("exercise_display_name", ""),
         })
@@ -127,8 +126,6 @@ def frame_to_catalog(frame: pd.DataFrame, original: dict[str, Any]) -> dict[str,
         conduct_id = "" if pd.isna(row.get("conduct_id")) else str(row["conduct_id"]).strip()
         if not conduct_id and all(pd.isna(row.get(key)) for key in ("lesson_plan_name", "aliases")):
             continue
-        priority_value = row.get("priority", 1000)
-        priority = 1000 if pd.isna(priority_value) else int(priority_value)
         rule = {
             "conduct_id": conduct_id,
             "lesson_plan_name": "" if pd.isna(row.get("lesson_plan_name")) else str(row["lesson_plan_name"]).strip(),
@@ -136,7 +133,6 @@ def frame_to_catalog(frame: pd.DataFrame, original: dict[str, Any]) -> dict[str,
             "use_display_name": bool(row.get("use_display_name", False)),
             "aliases": _lines(row.get("aliases")),
             "exclusions": _lines(row.get("exclusions")),
-            "priority": priority,
             "multi_day": bool(row.get("multi_day", False)),
             "active": bool(row.get("active", True)),
         }
@@ -340,7 +336,6 @@ elif page == "Conduct catalogue":
             "use_display_name": st.column_config.CheckboxColumn("Use display name in SIAO"),
             "aliases": st.column_config.TextColumn("Aliases · one per line", width="large"),
             "exclusions": st.column_config.TextColumn("Exclusions · one per line", width="large"),
-            "priority": st.column_config.NumberColumn("Priority", min_value=1, step=1),
             "multi_day": st.column_config.CheckboxColumn("Multi-day"),
             "exercise_display_name": st.column_config.TextColumn("Combined display name"),
         },

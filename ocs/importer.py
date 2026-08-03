@@ -200,7 +200,7 @@ def match_catalog_conduct(conduct_text, catalog, lesson_name_index):
                 }
         return {"status": "unmatched", "target": None, "candidates": []}
 
-    rule = sorted(candidates, key=lambda item: int(item.get("priority", 1000)))[0]
+    rule = candidates[0]
     target_key = normalize_conduct_name(rule.get("lesson_plan_name", ""))
     target = lesson_name_index.get(target_key)
     if target is None:
