@@ -48,10 +48,13 @@ browser.
 
 ## Deploy on Streamlit Community Cloud
 
-1. Push this repository to GitHub.
-2. Create a Community Cloud app with `app.py` as the entrypoint.
-3. Add a long, stable `TP_COOKIE_PASSWORD` in the app's Secrets settings.
-4. Open Settings in the deployed app and upload a TP before generating a draft.
+### Deploy your own fork
+
+1. Select **Fork** on GitHub to create a copy of this repository under your own account.
+2. In Streamlit Community Cloud, create an app from your forked repository.
+3. Select `app.py` as the entrypoint.
+4. Add a long, stable `TP_COOKIE_PASSWORD` in the app's Secrets settings.
+5. Deploy the app, open **Settings**, and upload a TP before generating a draft.
 
 The repository includes the default lesson plan, SIAO template, and conduct
 catalogue because the app offers them as downloads. It intentionally does not
