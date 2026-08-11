@@ -13,7 +13,7 @@ conducts:
   - ST Dispersal
   - Closing
   multi_day: false
-  active: true
+  active: false
 - conduct_id: interval_fast_march
   lesson_plan_name: INTERVAL FAST MARCH
   display_name: INTERVAL FAST MARCH
@@ -23,15 +23,6 @@ conducts:
   - IFM
   exclusions:
   - Prep
-  multi_day: false
-  active: true
-- conduct_id: ifm_st_mc_mut
-  lesson_plan_name: INTERVAL FAST MARCH
-  display_name: IFM/ST/MC MUT
-  use_display_name: false
-  aliases:
-  - IFM/ST/MC MUT
-  exclusions: []
   multi_day: false
   active: true
 - conduct_id: ex_relentless
@@ -72,6 +63,7 @@ conducts:
   - IGTS
   - Brief
   - Inspection
+  - Refresher
   multi_day: false
   active: true
 - conduct_id: mat_live_firing
@@ -111,6 +103,7 @@ conducts:
   - IGTS
   - Brief
   - Inspection
+  - Refresher
   multi_day: false
   active: true
 - conduct_id: ptco_jvlf
@@ -173,16 +166,6 @@ conducts:
   use_display_name: false
   aliases:
   - Endurance Run
-  exclusions:
-  - Prep
-  multi_day: false
-  active: true
-- conduct_id: combat_circuit_2
-  lesson_plan_name: COMBAT CIRCUIT
-  display_name: Combat Circuit 2
-  use_display_name: true
-  aliases:
-  - CC 2
   exclusions:
   - Prep
   multi_day: false
@@ -265,6 +248,7 @@ conducts:
   - PTCO
   - Pengun
   - LMG
+  - Refresher
   - GPMG
   multi_day: false
   active: true
