@@ -10,12 +10,15 @@ Handles:
 """
 
 import os
+import posixpath
+import zipfile
 from collections import defaultdict
 from datetime import datetime
 from html import escape
 from urllib.parse import urlencode
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from xml.etree import ElementTree as ET
 
 import numpy as np
 import openpyxl
@@ -741,20 +744,178 @@ class Importer:
         self.path = path
 
     def import_data(self):
-        read_rows = 2500
+        read_rows = 25000
         skip_rows = 5
         if self.path.endswith(".csv"):
-            return pd.read_csv(self.path, nrows=read_rows, skiprows=skip_rows)
+            return pd.read_csv(
+                self.path,
+                nrows=read_rows,
+                skiprows=skip_rows,
+                usecols=range(15),
+            )
 
         elif self.path.endswith((".xlsx", ".xlsm")):
-            return pd.read_excel(
+            data = pd.read_excel(
                 self.path,
                 sheet_name="ST COMBINED",
                 engine="openpyxl",
                 nrows=read_rows,
                 skiprows=skip_rows,
-                header=0
+                header=0,
+                usecols="A:O",
             )
+            return self._add_excel_text_boxes(
+                data,
+                sheet_name="ST COMBINED",
+                skip_rows=skip_rows,
+            )
+
+    def _add_excel_text_boxes(self, data, sheet_name, skip_rows):
+        """Overlay visible A:O text boxes onto their timetable lesson rows."""
+        text_boxes = self._read_excel_text_boxes(sheet_name)
+        if not text_boxes or data.shape[1] < 2:
+            return data
+
+        # Excel row ``skip_rows + 1`` is the pandas header, so the first
+        # dataframe record begins on the following Excel row.
+        first_data_row = skip_rows + 2
+        lesson_rows = []
+        for index, value in data.iloc[:, 1].items():
+            if normalize_conduct_name(value) == "LESSON":
+                lesson_rows.append((int(index), int(index) + first_data_row))
+
+        seen = set()
+        for box in text_boxes:
+            excel_column = box["column"]
+            if not 1 <= excel_column <= 15:
+                continue
+
+            candidates = [
+                row for row in lesson_rows
+                if abs(row[1] - box["row"]) <= 1
+            ]
+            if not candidates:
+                continue
+
+            dataframe_row, _ = min(
+                candidates,
+                key=lambda row: (abs(row[1] - box["row"]), row[1]),
+            )
+            text = box["text"].strip()
+            dedupe_key = (dataframe_row, normalize_conduct_name(text))
+            if not text or dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+
+            dataframe_column = excel_column - 1
+            existing = data.iat[dataframe_row, dataframe_column]
+            if pd.isna(existing) or not str(existing).strip():
+                data.iat[dataframe_row, dataframe_column] = text
+            elif normalize_conduct_name(existing) != normalize_conduct_name(text):
+                data.iat[dataframe_row, dataframe_column] = f"{existing}; {text}"
+
+        return data
+
+    def _read_excel_text_boxes(self, sheet_name):
+        """Read DrawingML text boxes because openpyxl does not expose them."""
+        main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        document_rel_ns = (
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        )
+        package_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+        drawing_ns = (
+            "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+        )
+        drawing_text_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+        try:
+            with zipfile.ZipFile(self.path) as archive:
+                workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+                workbook_rels = ET.fromstring(
+                    archive.read("xl/_rels/workbook.xml.rels")
+                )
+                rel_targets = {
+                    rel.attrib["Id"]: rel.attrib["Target"]
+                    for rel in workbook_rels.findall(
+                        f"{{{package_rel_ns}}}Relationship"
+                    )
+                }
+
+                sheet_path = None
+                for sheet in workbook.findall(f".//{{{main_ns}}}sheet"):
+                    if sheet.attrib.get("name") == sheet_name:
+                        rel_id = sheet.attrib.get(f"{{{document_rel_ns}}}id")
+                        target = rel_targets.get(rel_id, "")
+                        sheet_path = posixpath.normpath(
+                            posixpath.join("xl", target)
+                        )
+                        break
+                if not sheet_path:
+                    return []
+
+                sheet_xml = ET.fromstring(archive.read(sheet_path))
+                drawing = sheet_xml.find(f"{{{main_ns}}}drawing")
+                if drawing is None:
+                    return []
+
+                sheet_rels_path = posixpath.join(
+                    posixpath.dirname(sheet_path),
+                    "_rels",
+                    posixpath.basename(sheet_path) + ".rels",
+                )
+                sheet_rels = ET.fromstring(archive.read(sheet_rels_path))
+                drawing_rel_id = drawing.attrib.get(f"{{{document_rel_ns}}}id")
+                drawing_target = next(
+                    (
+                        rel.attrib.get("Target", "")
+                        for rel in sheet_rels.findall(
+                            f"{{{package_rel_ns}}}Relationship"
+                        )
+                        if rel.attrib.get("Id") == drawing_rel_id
+                    ),
+                    "",
+                )
+                if not drawing_target:
+                    return []
+
+                drawing_path = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(sheet_path), drawing_target)
+                )
+                drawing_xml = ET.fromstring(archive.read(drawing_path))
+
+                boxes = []
+                for anchor in list(drawing_xml):
+                    origin = anchor.find(f"{{{drawing_ns}}}from")
+                    if origin is None:
+                        continue
+                    row = origin.findtext(f"{{{drawing_ns}}}row")
+                    column = origin.findtext(f"{{{drawing_ns}}}col")
+                    if row is None or column is None:
+                        continue
+
+                    paragraphs = []
+                    for paragraph in anchor.findall(
+                        f".//{{{drawing_text_ns}}}p"
+                    ):
+                        runs = [
+                            node.text or ""
+                            for node in paragraph.findall(
+                                f".//{{{drawing_text_ns}}}t"
+                            )
+                        ]
+                        paragraph_text = "".join(runs).strip()
+                        if paragraph_text:
+                            paragraphs.append(paragraph_text)
+                    text = "\n".join(paragraphs).strip()
+                    if text:
+                        boxes.append({
+                            "row": int(row) + 1,
+                            "column": int(column) + 1,
+                            "text": text,
+                        })
+                return boxes
+        except (KeyError, OSError, ValueError, zipfile.BadZipFile, ET.ParseError):
+            return []
 
     def check_date_row(self, data: pd.DataFrame) -> list[int]:
         date_row = data.iloc[0]

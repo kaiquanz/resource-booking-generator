@@ -1,8 +1,10 @@
 import copy
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import openpyxl
+import pandas as pd
 import yaml
 
 from app_services import load_automation_module
@@ -77,6 +79,64 @@ class ConductCatalogTests(unittest.TestCase):
         )
         self.assertEqual(exact["status"], "inactive")
         self.assertEqual(alias["status"], "inactive")
+
+    def test_relentless_recovery_is_not_folded_into_exercise_range(self):
+        lesson_index = {
+            self.module.normalize_conduct_name("EX.RELENTLESS"): "EX.RELENTLESS"
+        }
+        result = self.module.match_catalog_conduct(
+            "EX Relentless Warrior Recovery",
+            self.catalog,
+            lesson_index,
+        )
+        self.assertEqual(result["status"], "unmatched")
+
+    def test_ptco_judgemental_video_maps_to_jvlf(self):
+        lesson_index = {
+            self.module.normalize_conduct_name("PTCO JVLF"): "PTCO JVLF"
+        }
+        result = self.module.match_catalog_conduct(
+            "PTCO Judgemental Video IGTS",
+            self.catalog,
+            lesson_index,
+        )
+        self.assertEqual(result["status"], "catalog")
+        self.assertEqual(result["target"], "PTCO JVLF")
+        self.assertTrue(result["use_display_name"])
+        self.assertEqual(result["display_name"], "PTCO JVLF")
+
+    def test_combined_mut_has_an_exact_unambiguous_rule(self):
+        lesson_index = {
+            self.module.normalize_conduct_name("INTERVAL FAST MARCH"):
+                "INTERVAL FAST MARCH",
+            self.module.normalize_conduct_name("STRENGTH TRAINING"):
+                "STRENGTH TRAINING",
+        }
+        result = self.module.match_catalog_conduct(
+            "IFM/ST/MC MUT",
+            self.catalog,
+            lesson_index,
+        )
+        self.assertEqual(result["status"], "catalog")
+        self.assertEqual(result["target"], "INTERVAL FAST MARCH")
+
+    def test_excel_text_boxes_are_limited_to_columns_a_to_o(self):
+        importer = self.module.Importer("training_plan.xlsx")
+        data = pd.DataFrame([[None] * 15 for _ in range(3)])
+        data.iat[1, 1] = "Lesson"
+        boxes = [
+            {"row": 8, "column": 3, "text": "NE Tour"},
+            {"row": 8, "column": 16, "text": "False helper data"},
+        ]
+        with patch.object(importer, "_read_excel_text_boxes", return_value=boxes):
+            overlaid = importer._add_excel_text_boxes(
+                data,
+                sheet_name="ST COMBINED",
+                skip_rows=5,
+            )
+        self.assertEqual(overlaid.iat[1, 2], "NE Tour")
+        self.assertEqual(overlaid.shape[1], 15)
+        self.assertNotIn("False helper data", overlaid.to_string())
 
     def test_conflicting_alias_is_ambiguous(self):
         catalog = {
