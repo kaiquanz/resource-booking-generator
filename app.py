@@ -340,6 +340,7 @@ if page == "AI TP reader":
         ):
             st.session_state.pop("approved_ai_events", None)
             st.session_state.pop("approved_ai_events_hash", None)
+            st.session_state.pop("approved_ai_event_errors", None)
             st.session_state.pop("siao_result", None)
             st.session_state.pop("siao_result_cadet_size", None)
             st.session_state.pop("booking_result", None)
@@ -347,10 +348,30 @@ if page == "AI TP reader":
 
         if event_errors:
             st.error("Resolve these issues before approval:\n\n- " + "\n- ".join(event_errors))
+            st.warning(
+                "You can approve the schedule without resolving these issues, "
+                "but SIAO or booking generation may reject incomplete rows."
+            )
         for warning in event_warnings:
             st.warning(warning)
 
-        approve_col, download_col = st.columns(2)
+        def approve_current_schedule(unresolved_errors=None):
+            st.session_state.approved_ai_events = cleaned_events.copy()
+            st.session_state.approved_ai_events_hash = review_hash
+            if unresolved_errors:
+                st.session_state.approved_ai_event_errors = list(unresolved_errors)
+            else:
+                st.session_state.pop("approved_ai_event_errors", None)
+            st.session_state.pop("siao_result", None)
+            st.session_state.pop("siao_result_cadet_size", None)
+            st.session_state.pop("booking_result", None)
+
+        if event_errors:
+            approve_col, warning_col, download_col = st.columns(3)
+        else:
+            approve_col, download_col = st.columns(2)
+            warning_col = None
+
         with approve_col:
             if st.button(
                 "Approve and use this schedule",
@@ -358,12 +379,19 @@ if page == "AI TP reader":
                 disabled=bool(event_errors),
                 use_container_width=True,
             ):
-                st.session_state.approved_ai_events = cleaned_events.copy()
-                st.session_state.approved_ai_events_hash = review_hash
-                st.session_state.pop("siao_result", None)
-                st.session_state.pop("siao_result_cadet_size", None)
-                st.session_state.pop("booking_result", None)
+                approve_current_schedule()
                 st.success("Approved. SIAO and Facility booking will now use this reviewed table.")
+        if warning_col is not None:
+            with warning_col:
+                if st.button(
+                    "⚠ Approve with issues",
+                    disabled=cleaned_events.empty,
+                    use_container_width=True,
+                ):
+                    approve_current_schedule(event_errors)
+                    st.warning(
+                        "Approved with unresolved issues. Check generated outputs carefully."
+                    )
         with download_col:
             st.download_button(
                 "Download reviewed events CSV",
@@ -375,9 +403,15 @@ if page == "AI TP reader":
 
         if "approved_ai_events" in st.session_state:
             st.success(f"AI-reviewed schedule active · {len(st.session_state.approved_ai_events)} events")
+            if unresolved := st.session_state.get("approved_ai_event_errors"):
+                st.warning(
+                    f"This active schedule has {len(unresolved)} unresolved "
+                    "issue(s). Output generation may fail for incomplete rows."
+                )
             if st.button("Stop using this AI schedule", use_container_width=True):
                 st.session_state.pop("approved_ai_events", None)
                 st.session_state.pop("approved_ai_events_hash", None)
+                st.session_state.pop("approved_ai_event_errors", None)
                 st.session_state.pop("siao_result", None)
                 st.session_state.pop("siao_result_cadet_size", None)
                 st.session_state.pop("booking_result", None)
@@ -403,6 +437,11 @@ elif page == "SIAO generator":
         approved_events = st.session_state.get("approved_ai_events")
         if isinstance(approved_events, pd.DataFrame):
             st.info(f"Using approved AI-readable schedule · {len(approved_events)} events")
+            if unresolved := st.session_state.get("approved_ai_event_errors"):
+                st.warning(
+                    f"This schedule was approved with {len(unresolved)} unresolved "
+                    "issue(s). Check the generated SIAO carefully."
+                )
         if st.button("Generate SIAO draft", type="primary", use_container_width=True):
             st.session_state.pop("siao_result", None)
             st.session_state.pop("siao_result_cadet_size", None)
@@ -482,6 +521,11 @@ elif page == "Facility booking":
     approved_events = st.session_state.get("approved_ai_events")
     if isinstance(approved_events, pd.DataFrame):
         st.info(f"Using approved AI-readable schedule · {len(approved_events)} events")
+        if unresolved := st.session_state.get("approved_ai_event_errors"):
+            st.warning(
+                f"This schedule was approved with {len(unresolved)} unresolved "
+                "issue(s). Check all booking times and dates carefully."
+            )
     if st.button("Generate booking draft", type="primary"):
         st.session_state.pop("booking_result", None)
         result = run_action(
