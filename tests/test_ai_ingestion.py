@@ -262,7 +262,7 @@ class AIIngestionTests(unittest.TestCase):
         config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
         reviewed = event_frame([{
             "date": "2026-10-01", "start_time": "08:00", "end_time": "09:00",
-            "conduct": "STRENGTH TRAINING", "location": "CA1", "remarks": "",
+            "conduct": "IPPT", "location": "CA1", "remarks": "",
             "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
         }])
         with contextlib.redirect_stdout(io.StringIO()):
@@ -311,6 +311,22 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(result["safti"].loc[0, "FACILITY"], "Stadium")
         self.assertEqual(result["email_draft"]["to"], "reviewer@example.com")
         self.assertIn("<table", result["email_draft"]["table_html"])
+
+    def test_ai_bookings_without_recipient_create_copyable_email_draft(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        config["user"]["email"] = ""
+        reviewed = event_frame([{
+            "date": "2026-10-02", "start_time": "10:00", "end_time": "11:00",
+            "conduct": "IPPT", "location": "Stadium", "remarks": "",
+            "source_reference": "page 2", "confidence": 1.0, "needs_review": False,
+        }])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_bookings_from_events(config, reviewed)
+
+        self.assertEqual(result["email_draft"]["to"], "")
+        self.assertIn("Subject: SAFTI Facility Booking Request", result["email_copy_text"])
+        self.assertIn("Stadium", result["email_copy_text"])
 
 
 if __name__ == "__main__":

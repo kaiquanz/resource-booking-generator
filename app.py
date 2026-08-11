@@ -570,17 +570,38 @@ elif page == "Facility booking":
 
         with safti_tab:
             draft = result["email_draft"]
-            st.text_input("To", value=draft["to"], disabled=True)
+            recipient = str(draft.get("to", "")).strip()
+            st.text_input("To", value=recipient, disabled=True)
             st.text_input("Subject", value=draft["subject"], disabled=True)
-            edited_body = st.text_area("Email introduction", value=draft["body"], height=110)
-            st.caption("Booking details will be sent as the table shown below.")
-            st.dataframe(result["safti"], use_container_width=True, hide_index=True)
-            if st.button("Send reviewed email", type="primary"):
-                reviewed_draft = {**draft, "body": edited_body}
-                run_action(
-                    lambda: send_booking_email(config, reviewed_draft),
-                    f"Email sent to {draft['to']}.",
+            if not recipient:
+                st.info(
+                    "No recipient email is configured. Copy the complete draft "
+                    "below into your preferred email app."
                 )
+                copy_text = result.get("email_copy_text") or draft["plain_body"]
+                copy_key = hashlib.sha256(copy_text.encode("utf-8")).hexdigest()[:12]
+                st.text_area(
+                    "Copyable SAFTI email draft",
+                    value=copy_text,
+                    height=300,
+                    key=f"safti_email_copy_{copy_key}",
+                )
+                st.caption("Booking details are included in the text field above.")
+                st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+            else:
+                edited_body = st.text_area(
+                    "Email introduction",
+                    value=draft["body"],
+                    height=110,
+                )
+                st.caption("Booking details will be sent as the table shown below.")
+                st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+                if st.button("Send reviewed email", type="primary"):
+                    reviewed_draft = {**draft, "body": edited_body}
+                    run_action(
+                        lambda: send_booking_email(config, reviewed_draft),
+                        f"Email sent to {recipient}.",
+                    )
 
 elif page == "Conduct catalogue":
     st.markdown('<div class="eyebrow">Data management</div>', unsafe_allow_html=True)

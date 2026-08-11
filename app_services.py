@@ -319,8 +319,6 @@ def save_editable_conduct_catalog(
 def generate_bookings(config: dict[str, Any]) -> dict[str, Any]:
     """Call ``resource_booking`` without credentials so it only creates a draft."""
     email = str(config.get("user", {}).get("email", "")).strip()
-    if not email:
-        raise ValueError("Set the recipient email in Settings first.")
 
     with tempfile.TemporaryDirectory(prefix="tp_booking_") as temp_dir:
         output_path = Path(temp_dir) / "ocs_booking.csv"
@@ -333,6 +331,10 @@ def generate_bookings(config: dict[str, Any]) -> dict[str, Any]:
         )
         result["ocs_csv"] = output_path.read_bytes()
         result["ocs_copy_text"] = result["ocs"].to_csv(index=False, sep="\t")
+        result["email_copy_text"] = (
+            f"Subject: {result['email_draft']['subject']}\n\n"
+            f"{result['email_draft']['plain_body']}"
+        ).rstrip()
     return result
 
 
@@ -342,8 +344,6 @@ def generate_bookings_from_events(
 ) -> dict[str, Any]:
     """Generate the same booking products from approved AI-readable events."""
     email = str(config.get("user", {}).get("email", "")).strip()
-    if not email:
-        raise ValueError("Set the recipient email in Settings first.")
 
     with tempfile.TemporaryDirectory(prefix="tp_ai_booking_") as temp_dir:
         output_path = Path(temp_dir) / "ocs_booking.csv"
@@ -360,11 +360,19 @@ def generate_bookings_from_events(
         )
         result["ocs_csv"] = output_path.read_bytes()
         result["ocs_copy_text"] = result["ocs"].to_csv(index=False, sep="\t")
+        result["email_copy_text"] = (
+            f"Subject: {result['email_draft']['subject']}\n\n"
+            f"{result['email_draft']['plain_body']}"
+        ).rstrip()
     return result
 
 
 def send_booking_email(config: dict[str, Any], draft: dict[str, str]) -> None:
     """Send a reviewed draft with an HTML table and plain-text fallback."""
+    recipient = str(draft.get("to", "")).strip()
+    if not recipient:
+        raise ValueError("Add a recipient email before sending, or copy the draft instead.")
+
     gmail = config.get("gmail", {})
     address = str(gmail.get("address", "")).strip()
     password = str(gmail.get("app_password", "")).strip()
@@ -384,7 +392,7 @@ def send_booking_email(config: dict[str, Any], draft: dict[str, str]) -> None:
     module.send_email(
         subject=draft["subject"],
         body=html_body or plain_body,
-        to_address=draft["to"],
+        to_address=recipient,
         from_address=address,
         app_password=password,
         html=bool(html_body),
