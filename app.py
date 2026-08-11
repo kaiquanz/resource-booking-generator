@@ -347,13 +347,29 @@ if page == "AI TP reader":
             st.info("The table changed. Approve it again before generating outputs.")
 
         if event_errors:
-            st.error("Resolve these issues before approval:\n\n- " + "\n- ".join(event_errors))
+            st.caption(f"Approval issues · {len(event_errors)}")
+            with st.container(
+                height=260,
+                border=True,
+                key="ai_approval_issues_scroll",
+            ):
+                st.error(
+                    "Resolve these issues before approval:\n\n- "
+                    + "\n- ".join(event_errors)
+                )
             st.warning(
                 "You can approve the schedule without resolving these issues, "
                 "but SIAO or booking generation may reject incomplete rows."
             )
-        for warning in event_warnings:
-            st.warning(warning)
+        if event_warnings:
+            st.caption(f"Review warnings · {len(event_warnings)}")
+            with st.container(
+                height=260,
+                border=True,
+                key="ai_review_warnings_scroll",
+            ):
+                for warning in event_warnings:
+                    st.warning(warning)
 
         def approve_current_schedule(unresolved_errors=None):
             st.session_state.approved_ai_events = cleaned_events.copy()
