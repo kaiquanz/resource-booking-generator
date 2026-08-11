@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import mimetypes
 import os
 import secrets
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import yaml
 from streamlit_cookies_manager import EncryptedCookieManager
@@ -21,6 +23,7 @@ from ai_ingestion import (
     validate_reviewed_events,
 )
 from app_services import (
+    build_booking_email_content,
     generate_bookings,
     generate_bookings_from_events,
     generate_siao,
@@ -75,6 +78,83 @@ def run_action(action, success_message: str):
     except Exception as exc:
         st.error(str(exc))
         return None
+
+
+def render_rich_email_copy_button(html_body: str, plain_body: str) -> None:
+    """Copy an email as rich HTML, with a plain-text browser fallback."""
+    safe_html = json.dumps(str(html_body)).replace("<", "\\u003c")
+    safe_plain = json.dumps(str(plain_body)).replace("<", "\\u003c")
+    components.html(
+        f"""
+        <button id="copy-email" type="button">Copy formatted email body</button>
+        <script>
+          const button = document.getElementById("copy-email");
+          const htmlBody = {safe_html};
+          const plainBody = {safe_plain};
+
+          function copyFormattedFallback() {{
+            const field = document.createElement("div");
+            field.contentEditable = "true";
+            field.innerHTML = htmlBody;
+            field.style.position = "fixed";
+            field.style.left = "-10000px";
+            field.style.top = "0";
+            document.body.appendChild(field);
+            const range = document.createRange();
+            range.selectNodeContents(field);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            const copied = document.execCommand("copy");
+            selection.removeAllRanges();
+            field.remove();
+            return copied;
+          }}
+
+          function copyPlainText() {{
+            const field = document.createElement("textarea");
+            field.value = plainBody;
+            field.style.position = "fixed";
+            field.style.opacity = "0";
+            document.body.appendChild(field);
+            field.select();
+            document.execCommand("copy");
+            field.remove();
+          }}
+
+          button.addEventListener("click", async () => {{
+            try {{
+              if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {{
+                await navigator.clipboard.write([new ClipboardItem({{
+                  "text/html": new Blob([htmlBody], {{type: "text/html"}}),
+                  "text/plain": new Blob([plainBody], {{type: "text/plain"}}),
+                }})]);
+              }} else {{
+                if (!copyFormattedFallback()) copyPlainText();
+              }}
+              button.textContent = "✓ Copied with table formatting";
+            }} catch (error) {{
+              if (copyFormattedFallback()) {{
+                button.textContent = "✓ Copied with table formatting";
+              }} else {{
+                copyPlainText();
+                button.textContent = "✓ Copied as plain text";
+              }}
+            }}
+          }});
+        </script>
+        <style>
+          body {{ margin:0; font-family:Arial, sans-serif; }}
+          #copy-email {{
+            width:100%; min-height:44px; border:1px solid #176b4d;
+            border-radius:9px; background:#176b4d; color:white;
+            font-size:15px; font-weight:650; cursor:pointer;
+          }}
+          #copy-email:hover {{ background:#12563e; }}
+        </style>
+        """,
+        height=52,
+    )
 
 
 def stage_uploaded_file(setting_key: str, uploaded_file) -> Path:
@@ -586,21 +666,25 @@ elif page == "Facility booking":
                     height=110,
                 )
 
+            copy_content = build_booking_email_content(draft, edited_body)
             copy_text = (
-                f"Subject: {draft['subject']}\n\n"
-                f"{edited_body}\n\n{draft['table_text']}"
+                f"Subject: {draft['subject']}\n\n{copy_content['plain']}"
             ).rstrip()
             copy_key = hashlib.sha256(copy_text.encode("utf-8")).hexdigest()[:12]
-            st.text_area(
-                "Complete email draft · includes booking table",
-                value=copy_text,
-                height=300,
-                key=f"safti_email_copy_{copy_key}",
+            render_rich_email_copy_button(
+                copy_content["html"],
+                copy_content["plain"],
             )
             st.caption(
-                "Copy the field above to include both the email text and the "
-                "complete booking table."
+                "Paste into Gmail or Outlook to retain the formatted booking table."
             )
+            with st.expander("Plain-text copy fallback"):
+                st.text_area(
+                    "Complete plain-text email draft",
+                    value=copy_text,
+                    height=260,
+                    key=f"safti_email_copy_{copy_key}",
+                )
             st.dataframe(result["safti"], use_container_width=True, hide_index=True)
 
             if recipient:

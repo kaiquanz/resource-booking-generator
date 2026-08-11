@@ -367,6 +367,24 @@ def generate_bookings_from_events(
     return result
 
 
+def build_booking_email_content(
+    draft: dict[str, str],
+    introduction: str | None = None,
+) -> dict[str, str]:
+    """Build matching rich-HTML and plain-text versions of a booking email."""
+    module = load_automation_module()
+    reviewed_introduction = draft["body"] if introduction is None else introduction
+    table_text = draft.get("table_text", "")
+    table_html = draft.get("table_html", "")
+    plain_body = f"{reviewed_introduction}\n\n{table_text}".rstrip()
+    html_body = (
+        module.build_booking_email_html(reviewed_introduction, table_html)
+        if table_html
+        else ""
+    )
+    return {"plain": plain_body, "html": html_body}
+
+
 def send_booking_email(config: dict[str, Any], draft: dict[str, str]) -> None:
     """Send a reviewed draft with an HTML table and plain-text fallback."""
     recipient = str(draft.get("to", "")).strip()
@@ -379,16 +397,10 @@ def send_booking_email(config: dict[str, Any], draft: dict[str, str]) -> None:
     if not address or not password:
         raise ValueError("Add the Gmail address and app password in Settings before sending.")
 
+    content = build_booking_email_content(draft)
+    plain_body = content["plain"]
+    html_body = content["html"]
     module = load_automation_module()
-    introduction = draft["body"]
-    table_text = draft.get("table_text", "")
-    table_html = draft.get("table_html", "")
-    plain_body = f"{introduction}\n\n{table_text}".rstrip()
-    html_body = (
-        module.build_booking_email_html(introduction, table_html)
-        if table_html
-        else ""
-    )
     module.send_email(
         subject=draft["subject"],
         body=html_body or plain_body,

@@ -20,6 +20,7 @@ from ai_ingestion import (
     validate_reviewed_events,
 )
 from app_services import (
+    build_booking_email_content,
     canonical_events_to_functional_data,
     generate_bookings_from_events,
     generate_siao_from_events,
@@ -328,6 +329,9 @@ class AIIngestionTests(unittest.TestCase):
         self.assertIn("Subject: SAFTI Facility Booking Request", result["email_copy_text"])
         self.assertIn("FACILITY", result["email_copy_text"])
         self.assertIn("Stadium", result["email_copy_text"])
+        content = build_booking_email_content(result["email_draft"])
+        self.assertIn("<table", content["html"])
+        self.assertIn("Stadium", content["html"])
 
 
 if __name__ == "__main__":
