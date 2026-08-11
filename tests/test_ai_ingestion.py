@@ -326,6 +326,7 @@ class AIIngestionTests(unittest.TestCase):
 
         self.assertEqual(result["email_draft"]["to"], "")
         self.assertIn("Subject: SAFTI Facility Booking Request", result["email_copy_text"])
+        self.assertIn("FACILITY", result["email_copy_text"])
         self.assertIn("Stadium", result["email_copy_text"])
 
 

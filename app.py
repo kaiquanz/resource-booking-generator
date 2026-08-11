@@ -578,24 +578,32 @@ elif page == "Facility booking":
                     "No recipient email is configured. Copy the complete draft "
                     "below into your preferred email app."
                 )
-                copy_text = result.get("email_copy_text") or draft["plain_body"]
-                copy_key = hashlib.sha256(copy_text.encode("utf-8")).hexdigest()[:12]
-                st.text_area(
-                    "Copyable SAFTI email draft",
-                    value=copy_text,
-                    height=300,
-                    key=f"safti_email_copy_{copy_key}",
-                )
-                st.caption("Booking details are included in the text field above.")
-                st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+                edited_body = draft["body"]
             else:
                 edited_body = st.text_area(
                     "Email introduction",
                     value=draft["body"],
                     height=110,
                 )
-                st.caption("Booking details will be sent as the table shown below.")
-                st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+
+            copy_text = (
+                f"Subject: {draft['subject']}\n\n"
+                f"{edited_body}\n\n{draft['table_text']}"
+            ).rstrip()
+            copy_key = hashlib.sha256(copy_text.encode("utf-8")).hexdigest()[:12]
+            st.text_area(
+                "Complete email draft · includes booking table",
+                value=copy_text,
+                height=300,
+                key=f"safti_email_copy_{copy_key}",
+            )
+            st.caption(
+                "Copy the field above to include both the email text and the "
+                "complete booking table."
+            )
+            st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+
+            if recipient:
                 if st.button("Send reviewed email", type="primary"):
                     reviewed_draft = {**draft, "body": edited_body}
                     run_action(
