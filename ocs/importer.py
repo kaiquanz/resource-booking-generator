@@ -710,6 +710,33 @@ def dataframe_to_email_table(dataframe):
     )
 
 
+def sort_booking_dataframe(dataframe):
+    """Order bookings chronologically without changing their displayed values."""
+    if dataframe.empty:
+        return dataframe.reset_index(drop=True)
+
+    sortable = dataframe.copy()
+    sortable["_start_date"] = pd.to_datetime(
+        sortable["START DATE"],
+        format="%d-%b-%y",
+        errors="coerce",
+    )
+    sortable["_start_time"] = pd.to_timedelta(
+        sortable["START TIME"].astype(str) + ":00",
+        errors="coerce",
+    )
+    return (
+        sortable.sort_values(
+            ["_start_date", "_start_time", "FACILITY"],
+            ascending=True,
+            na_position="last",
+            kind="stable",
+        )
+        .drop(columns=["_start_date", "_start_time"])
+        .reset_index(drop=True)
+    )
+
+
 def send_email(subject, body, to_address, from_address, app_password, html=False, plain_body=None):
     """
     Sends an email via Gmail SMTP using an App Password
@@ -1452,14 +1479,14 @@ class Extractor:
             "FACILITY", "START DATE", "START TIME",
             "END DATE", "END TIME", "REMARKS/JUSTIFICATIONS", "YOUR EMAIL",
         ]
-        ocs_df = pd.DataFrame(ocs_rows, columns=headers)
+        ocs_df = sort_booking_dataframe(pd.DataFrame(ocs_rows, columns=headers))
         ocs_df.to_csv(output_path, index=False)
 
         print(f"--- OCS Facility Bookings ({len(ocs_df)}) -> {output_path} ---")
         print(ocs_df.to_string(index=False))
 
         # 2. SAFTI facilities -> draft email (not sent yet)
-        safti_df = pd.DataFrame(safti_rows, columns=headers)
+        safti_df = sort_booking_dataframe(pd.DataFrame(safti_rows, columns=headers))
 
         email_intro = "Requesting the following SAFTI facility bookings:"
         table_text = safti_df.to_string(index=False)

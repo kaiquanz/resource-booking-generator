@@ -157,6 +157,26 @@ def render_rich_email_copy_button(html_body: str, plain_body: str) -> None:
     )
 
 
+def booking_table_for_display(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Expose real dates to Streamlit so header sorting is chronological."""
+    displayed = bookings.copy()
+    for column in ("START DATE", "END DATE"):
+        parsed = pd.to_datetime(
+            displayed[column],
+            format="%d-%b-%y",
+            errors="coerce",
+        )
+        if parsed.notna().all():
+            displayed[column] = parsed
+    return displayed
+
+
+BOOKING_DATE_COLUMNS = {
+    "START DATE": st.column_config.DateColumn(format="DD-MMM-YY"),
+    "END DATE": st.column_config.DateColumn(format="DD-MMM-YY"),
+}
+
+
 def stage_uploaded_file(setting_key: str, uploaded_file) -> Path:
     """Keep an uploaded input available for the current Streamlit session."""
     if "upload_directory" not in st.session_state:
@@ -640,7 +660,12 @@ elif page == "Facility booking":
         with ocs_tab:
             st.caption("Use the copy icon on the block below, or download the CSV.")
             st.code(result["ocs_copy_text"], language=None)
-            st.dataframe(result["ocs"], use_container_width=True, hide_index=True)
+            st.dataframe(
+                booking_table_for_display(result["ocs"]),
+                use_container_width=True,
+                hide_index=True,
+                column_config=BOOKING_DATE_COLUMNS,
+            )
             st.download_button(
                 "Download OCS bookings",
                 result["ocs_csv"],
@@ -685,7 +710,12 @@ elif page == "Facility booking":
                     height=260,
                     key=f"safti_email_copy_{copy_key}",
                 )
-            st.dataframe(result["safti"], use_container_width=True, hide_index=True)
+            st.dataframe(
+                booking_table_for_display(result["safti"]),
+                use_container_width=True,
+                hide_index=True,
+                column_config=BOOKING_DATE_COLUMNS,
+            )
 
             if recipient:
                 if st.button("Send reviewed email", type="primary"):
