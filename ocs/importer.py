@@ -23,6 +23,8 @@ import pandas as pd
 import re
 import yaml
 import smtplib
+from openpyxl.styles import PatternFill
+from openpyxl.utils import column_index_from_string
 
 # ---------------------------------------------------------------------------
 # Editable conduct catalogue
@@ -409,6 +411,65 @@ vehicle_types = [
     "M1 Gate Key",
     "Others",
 ]
+
+
+SIAO_MANUAL_INPUT_FILL = PatternFill(
+    fill_type="solid",
+    fgColor="FFFFF2CC",
+)
+
+
+def _has_siao_allocation(value):
+    """Return whether a generated SIAO value represents a real allocation."""
+    if value is None:
+        return False
+
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, str):
+        return value.strip() not in {"", "-", "0", "0.0"}
+
+    if isinstance(value, (int, float, np.number)):
+        return value != 0
+
+    return bool(value)
+
+
+def highlight_siao_manual_inputs(ws, row):
+    """Highlight fields that the user must complete in a generated SIAO row."""
+    def fill(columns):
+        for column in columns:
+            ws[f"{column}{row}"].fill = SIAO_MANUAL_INPUT_FILL
+
+    fill(("F", "H", "I", "J", "M", "N", "O", "BV", "BW"))
+
+    ammo_base_exists = _has_siao_allocation(ws[f"T{row}"].value)
+    conventional_arms_exist = any(
+        _has_siao_allocation(ws.cell(row, column).value)
+        for column in range(
+            column_index_from_string("W"),
+            column_index_from_string("AV") + 1,
+        )
+    )
+    if ammo_base_exists or conventional_arms_exist:
+        fill(("R", "S"))
+
+    military_transport_exists = any(
+        _has_siao_allocation(ws.cell(row, column).value)
+        for column in range(
+            column_index_from_string("CN"),
+            column_index_from_string("CP") + 1,
+        )
+    )
+    if military_transport_exists:
+        fill(("CJ", "CK", "CL", "CM"))
+
+    if _has_siao_allocation(ws[f"CX{row}"].value):
+        fill(("CU", "CV", "CW"))
 
 remarks_types = [
     "Recce",
@@ -939,6 +1000,8 @@ class Extractor:
                 # Write row into Excel starting from column C
                 for col_num, value in enumerate(l, start=3):
                     ws.cell(row=start_row, column=col_num, value=value)
+
+                highlight_siao_manual_inputs(ws, start_row)
 
                 start_row += 1
 

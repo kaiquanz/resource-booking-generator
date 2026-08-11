@@ -2,6 +2,7 @@ import copy
 import unittest
 from pathlib import Path
 
+import openpyxl
 import yaml
 
 from app_services import load_automation_module
@@ -104,6 +105,33 @@ class ConductCatalogTests(unittest.TestCase):
     def test_yaml_is_parseable(self):
         raw = (ROOT / "ocs" / "conduct_catalog.yaml").read_text(encoding="utf-8")
         self.assertIsInstance(yaml.safe_load(raw), dict)
+
+    def test_siao_manual_input_highlights_follow_allocations(self):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        self.module.highlight_siao_manual_inputs(sheet, 13)
+        always_highlighted = ("F", "H", "I", "J", "M", "N", "O", "BV", "BW")
+        for column in always_highlighted:
+            self.assertEqual(sheet[f"{column}13"].fill.fgColor.rgb, "FFFFF2CC")
+
+        for column in ("R", "S", "CJ", "CK", "CL", "CM", "CU", "CV", "CW"):
+            self.assertIsNone(sheet[f"{column}13"].fill.fill_type)
+
+        sheet["W14"] = 120
+        sheet["CN14"] = 1
+        sheet["CX14"] = "2 x 45-seater buses"
+        self.module.highlight_siao_manual_inputs(sheet, 14)
+
+        for column in ("R", "S", "CJ", "CK", "CL", "CM", "CU", "CV", "CW"):
+            self.assertEqual(sheet[f"{column}14"].fill.fgColor.rgb, "FFFFF2CC")
+
+        sheet["T15"] = "SAFTI Ammo Point"
+        self.module.highlight_siao_manual_inputs(sheet, 15)
+        self.assertEqual(sheet["R15"].fill.fgColor.rgb, "FFFFF2CC")
+        self.assertEqual(sheet["S15"].fill.fgColor.rgb, "FFFFF2CC")
+
+        workbook.close()
 
 
 if __name__ == "__main__":
