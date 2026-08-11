@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 
 MAX_AI_FILE_BYTES = 50 * 1024 * 1024
-DEFAULT_AI_MODEL = "gpt-5.6"
+DEFAULT_AI_MODEL = "gpt-5.6-luna"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 SUPPORTED_SUFFIXES = IMAGE_SUFFIXES | {
     ".pdf", ".csv", ".tsv", ".xlsx", ".xls", ".xlsm"
@@ -166,10 +166,9 @@ def extract_training_plan_with_ai(
     path: str | Path,
     *,
     api_key: str,
-    model: str = DEFAULT_AI_MODEL,
     client: Any | None = None,
 ) -> dict[str, Any]:
-    """Extract a training plan with multimodal Structured Outputs."""
+    """Extract a training plan with GPT-5.6 Luna Structured Outputs."""
     source_path = Path(path)
     if not source_path.is_file():
         raise FileNotFoundError(f"Training plan was not found: {source_path}")
@@ -185,7 +184,7 @@ def extract_training_plan_with_ai(
 
     try:
         response = client.responses.parse(
-            model=model,
+            model=DEFAULT_AI_MODEL,
             store=False,
             input=[
                 {
@@ -218,7 +217,7 @@ def extract_training_plan_with_ai(
         "document_title": parsed.document_title,
         "events": events,
         "warnings": list(parsed.warnings),
-        "model": getattr(response, "model", model),
+        "model": getattr(response, "model", DEFAULT_AI_MODEL),
         "response_id": getattr(response, "id", ""),
     }
 

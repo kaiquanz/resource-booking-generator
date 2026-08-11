@@ -10,6 +10,7 @@ import pandas as pd
 import yaml
 
 from ai_ingestion import (
+    DEFAULT_AI_MODEL,
     EVENT_COLUMNS,
     TrainingPlanExtraction,
     build_ai_input,
@@ -55,7 +56,7 @@ class FakeResponses:
             status="completed",
             output_parsed=parsed,
             output=[],
-            model="gpt-test",
+            model=DEFAULT_AI_MODEL,
             id="resp_test",
         )
 
@@ -120,15 +121,15 @@ class AIIngestionTests(unittest.TestCase):
             result = extract_training_plan_with_ai(
                 source,
                 api_key="test-key",
-                model="gpt-test",
                 client=client,
             )
 
         request = client.responses.kwargs
-        self.assertEqual(request["model"], "gpt-test")
+        self.assertEqual(DEFAULT_AI_MODEL, "gpt-5.6-luna")
+        self.assertEqual(request["model"], DEFAULT_AI_MODEL)
         self.assertIs(request["text_format"], TrainingPlanExtraction)
         self.assertFalse(request["store"])
-        self.assertEqual(result["model"], "gpt-test")
+        self.assertEqual(result["model"], DEFAULT_AI_MODEL)
         self.assertEqual(result["events"].loc[0, "conduct"], "STRENGTH TRAINING")
 
     def test_review_validation_preserves_iso_dates(self):

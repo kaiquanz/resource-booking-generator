@@ -75,9 +75,9 @@ Railway, Fly.io, or a container host. Vercel's normal serverless functions are
 not a good fit for this app.
 
 Set `TP_COOKIE_PASSWORD` and `OPENAI_API_KEY` as host secrets. Keep the cookie
-password stable across deploys. You may optionally set `OPENAI_MODEL`; it
-defaults to `gpt-5.6`. Never place the API key in `ocs/config.yaml`, browser
-cookies, or a downloadable local configuration file.
+password stable across deploys. AI extraction is locked to `gpt-5.6-luna`;
+there is no model override. Never place the API key in `ocs/config.yaml`,
+browser cookies, or a downloadable local configuration file.
 `ocs/config.yaml` is loaded relative to `app.py`. File paths inside it may be
 absolute for local use or relative to the repository root for hosted use.
 Repository-relative paths work unchanged on Streamlit Community Cloud.
@@ -99,7 +99,7 @@ it broadly; otherwise visitors can consume the deployment owner's API quota.
 2. In Streamlit Community Cloud, create an app from your forked repository.
 3. Select `app.py` as the entrypoint.
 4. In the app's Secrets settings, add a long, stable `TP_COOKIE_PASSWORD` and an
-   `OPENAI_API_KEY`. `OPENAI_MODEL` is optional.
+   `OPENAI_API_KEY`. The application always uses `gpt-5.6-luna`.
 5. Deploy the app. Use **AI TP reader** for flexible PDFs, images, and
    spreadsheets, or open **Settings** to upload a TP for the original reader.
 

@@ -72,11 +72,6 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--cadet-size", type=int, default=120)
     parser.add_argument("--email", default="dev-reviewer@example.invalid")
-    parser.add_argument(
-        "--model",
-        default="",
-        help="Override OPENAI_MODEL for this run.",
-    )
     return parser.parse_args()
 
 
@@ -127,7 +122,6 @@ def main() -> int:
             "Do not paste the key into config.yaml or commit it to Git."
         )
 
-    model = args.model.strip() or _setting("OPENAI_MODEL", DEFAULT_AI_MODEL)
     if args.cadet_size < 1:
         raise SystemExit("--cadet-size must be at least 1.")
 
@@ -142,11 +136,10 @@ def main() -> int:
             source_path.write_text(SYNTHETIC_TP, encoding="utf-8")
             print("Sending the built-in synthetic training plan to OpenAI.")
 
-        print(f"Model: {model}")
+        print(f"Model: {DEFAULT_AI_MODEL}")
         extraction = extract_training_plan_with_ai(
             source_path,
             api_key=api_key,
-            model=model,
         )
 
     reviewed_events, errors, warnings = validate_reviewed_events(extraction["events"])

@@ -227,7 +227,7 @@ if page == "AI TP reader":
     )
 
     ai_api_key = deployment_secret("OPENAI_API_KEY")
-    ai_model = deployment_secret("OPENAI_MODEL", DEFAULT_AI_MODEL)
+    ai_model = DEFAULT_AI_MODEL
     ai_upload = st.file_uploader(
         "Training plan",
         type=["pdf", "png", "jpg", "jpeg", "webp", "gif", "csv", "tsv", "xlsx", "xls", "xlsm"],
@@ -253,10 +253,10 @@ if page == "AI TP reader":
                 st.session_state.pop(state_key, None)
         ai_source_path = stage_uploaded_file("ai_input_data", ai_upload)
 
-    if not ai_api_key:
-        st.info(
-            'Add `OPENAI_API_KEY = "..."` to Streamlit Community Cloud Secrets. The key is never stored in config.yaml or browser cookies.'
-        )
+    # if not ai_api_key:
+    #     st.info(
+    #         'Add `OPENAI_API_KEY = "..."` to Streamlit Community Cloud Secrets. The key is never stored in config.yaml or browser cookies.'
+    #     )
 
     if st.button(
         "Extract editable schedule with AI",
@@ -278,7 +278,6 @@ if page == "AI TP reader":
             lambda: extract_training_plan_with_ai(
                 ai_source_path,
                 api_key=ai_api_key,
-                model=ai_model,
             ),
             "AI extraction completed. Review every row below.",
         )
