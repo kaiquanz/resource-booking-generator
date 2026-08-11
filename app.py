@@ -315,6 +315,7 @@ if page == "AI TP reader":
         edited_events = st.data_editor(
             extraction["events"],
             num_rows="dynamic",
+            height=480,
             use_container_width=True,
             hide_index=True,
             key="ai_event_editor",
