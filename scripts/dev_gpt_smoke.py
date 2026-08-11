@@ -141,6 +141,13 @@ def main() -> int:
             source_path,
             api_key=api_key,
         )
+        print(f"Coverage: {extraction.get('coverage_label') or 'complete file'}")
+        if extraction.get("source_date_end"):
+            print(
+                "Date span: "
+                f"source ends {extraction['source_date_end']}; "
+                f"events end {extraction.get('event_date_end') or 'unknown'}"
+            )
 
     reviewed_events, errors, warnings = validate_reviewed_events(extraction["events"])
     if errors:

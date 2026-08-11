@@ -8,11 +8,13 @@ from types import SimpleNamespace
 import openpyxl
 import pandas as pd
 import yaml
+from pypdf import PdfWriter
 
 from ai_ingestion import (
     DEFAULT_AI_MODEL,
     EVENT_COLUMNS,
     TrainingPlanExtraction,
+    _date_span_from_texts,
     build_ai_input,
     extract_training_plan_with_ai,
     validate_reviewed_events,
@@ -66,7 +68,53 @@ class FakeClient:
         self.responses = FakeResponses()
 
 
+class ChunkedFakeResponses:
+    def __init__(self):
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        call_number = len(self.calls)
+        dates = ["2026-10-01", "2026-10-15", "2026-11-05"]
+        parsed = TrainingPlanExtraction.model_validate({
+            "document_title": "Long TP",
+            "events": [{
+                "date": dates[call_number - 1],
+                "start_time": "08:00",
+                "end_time": "09:00",
+                "conduct": f"EVENT {call_number}",
+                "location": "Training Area",
+                "remarks": "",
+                "source_reference": f"original page {call_number * 2 - 1}",
+                "confidence": 0.95,
+                "needs_review": False,
+            }],
+            "warnings": [],
+        })
+        return SimpleNamespace(
+            status="completed",
+            output_parsed=parsed,
+            output=[],
+            model=DEFAULT_AI_MODEL,
+            id=f"resp_chunk_{call_number}",
+        )
+
+
+class ChunkedFakeClient:
+    def __init__(self):
+        self.responses = ChunkedFakeResponses()
+
+
 class AIIngestionTests(unittest.TestCase):
+    def test_visible_pdf_date_span_includes_the_final_month(self):
+        start_date, end_date = _date_span_from_texts([
+            "Week 1: 1-Oct-26 to 7-Oct-26",
+            "Final week: 24-Nov-26 to 30-Nov-26",
+        ])
+
+        self.assertEqual(start_date, "2026-10-01")
+        self.assertEqual(end_date, "2026-11-30")
+
     def test_pdf_uses_ephemeral_file_input(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "visual-plan.pdf"
@@ -116,7 +164,10 @@ class AIIngestionTests(unittest.TestCase):
     def test_structured_extraction_request_and_result(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "plan.pdf"
-            source.write_bytes(b"%PDF-1.4 test")
+            writer = PdfWriter()
+            writer.add_blank_page(width=792, height=612)
+            with source.open("wb") as stream:
+                writer.write(stream)
             client = FakeClient()
             result = extract_training_plan_with_ai(
                 source,
@@ -127,10 +178,39 @@ class AIIngestionTests(unittest.TestCase):
         request = client.responses.kwargs
         self.assertEqual(DEFAULT_AI_MODEL, "gpt-5.6-luna")
         self.assertEqual(request["model"], DEFAULT_AI_MODEL)
+        self.assertEqual(request["max_output_tokens"], 64_000)
         self.assertIs(request["text_format"], TrainingPlanExtraction)
         self.assertFalse(request["store"])
         self.assertEqual(result["model"], DEFAULT_AI_MODEL)
         self.assertEqual(result["events"].loc[0, "conduct"], "STRENGTH TRAINING")
+        self.assertEqual(result["coverage_label"], "1/1 PDF pages")
+
+    def test_pdf_chunks_reach_and_merge_the_final_month(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "long-plan.pdf"
+            writer = PdfWriter()
+            for _ in range(5):
+                writer.add_blank_page(width=792, height=612)
+            with source.open("wb") as stream:
+                writer.write(stream)
+            client = ChunkedFakeClient()
+            result = extract_training_plan_with_ai(
+                source,
+                api_key="test-key",
+                client=client,
+            )
+
+        self.assertEqual(len(client.responses.calls), 3)
+        self.assertEqual(result["page_ranges"], ["1-2", "3-4", "5"])
+        self.assertEqual(result["coverage_label"], "5/5 PDF pages")
+        self.assertEqual(result["chunks_processed"], 3)
+        self.assertEqual(result["events"]["date"].tolist()[-1], "2026-11-05")
+        self.assertTrue(
+            all(call["model"] == DEFAULT_AI_MODEL for call in client.responses.calls)
+        )
+        final_prompt = client.responses.calls[-1]["input"][0]["content"][1]["text"]
+        self.assertIn("original page 5", final_prompt)
+        self.assertIn("5-page source PDF", final_prompt)
 
     def test_review_validation_preserves_iso_dates(self):
         reviewed = event_frame([{

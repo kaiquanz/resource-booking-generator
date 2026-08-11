@@ -235,6 +235,11 @@ if page == "AI TP reader":
         help="Maximum 50 MB. PDFs may contain scans, pictures, or visual timetable boxes.",
     )
     st.caption("If a spreadsheet relies on drawings or embedded images, export it to PDF first so the visual layout is included.")
+    if ai_upload is not None and Path(ai_upload.name).suffix.lower() == ".pdf":
+        st.caption(
+            "For completeness, PDFs are checked two pages at a time and merged. "
+            "Long plans can take several minutes and use multiple API requests."
+        )
 
     ai_source_path = None
     if ai_upload is not None:
@@ -286,10 +291,22 @@ if page == "AI TP reader":
             st.session_state.pop("ai_event_editor", None)
 
     if extraction := st.session_state.get("ai_extraction"):
-        title_col, model_col, event_col = st.columns([2, 1, 1])
+        title_col, model_col, event_col, coverage_col = st.columns([2, 1, 1, 1.2])
         title_col.metric("Document", extraction.get("document_title") or "Untitled")
         model_col.metric("Model", extraction.get("model") or ai_model)
         event_col.metric("Events", len(extraction["events"]))
+        coverage_col.metric("Coverage", extraction.get("coverage_label") or "Complete file")
+        if extraction.get("source_date_start") and extraction.get("source_date_end"):
+            extracted_span = "unknown"
+            if extraction.get("event_date_start") and extraction.get("event_date_end"):
+                extracted_span = (
+                    f"{extraction['event_date_start']} to {extraction['event_date_end']}"
+                )
+            st.caption(
+                "Detected PDF span: "
+                f"{extraction['source_date_start']} to {extraction['source_date_end']} · "
+                f"extracted event span: {extracted_span}"
+            )
         for warning in extraction.get("warnings", []):
             st.warning(warning)
 

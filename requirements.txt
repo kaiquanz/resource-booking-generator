@@ -8,5 +8,6 @@ xlrd>=2,<3
 PyYAML>=6,<7
 openai>=2,<3
 pydantic>=2.8,<3
+pypdf>=6,<7
 streamlit>=1.45,<2
 streamlit-cookies-manager>=0.2.0,<1

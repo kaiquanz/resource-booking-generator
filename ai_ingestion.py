@@ -6,15 +6,19 @@ import base64
 import io
 import mimetypes
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import openpyxl
 from pydantic import BaseModel, Field
+from pypdf import PdfReader, PdfWriter
 
 
 MAX_AI_FILE_BYTES = 50 * 1024 * 1024
+MAX_AI_OUTPUT_TOKENS = 64_000
+PDF_PAGES_PER_REQUEST = 2
 DEFAULT_AI_MODEL = "gpt-5.6-luna"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 SUPPORTED_SUFFIXES = IMAGE_SUFFIXES | {
@@ -74,6 +78,8 @@ Rules:
 - Ignore decorative elements and administrative headers that are not scheduled
   events.
 - If the document is not a training plan, return no events and add a warning.
+- Completeness is mandatory: inspect every supplied page through its final row
+  and do not stop after finding a plausible partial schedule.
 """.strip()
 
 
@@ -116,7 +122,11 @@ def _api_file_payload(path: Path) -> tuple[bytes, str, str]:
     )
 
 
-def build_ai_input(path: Path) -> list[dict[str, Any]]:
+def build_ai_input(
+    path: Path,
+    *,
+    prompt: str = EXTRACTION_PROMPT,
+) -> list[dict[str, Any]]:
     """Build a Responses API content list without uploading persistent files."""
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
@@ -146,7 +156,7 @@ def build_ai_input(path: Path) -> list[dict[str, Any]]:
         }
         if suffix == ".pdf":
             source["detail"] = "high"
-    return [source, {"type": "input_text", "text": EXTRACTION_PROMPT}]
+    return [source, {"type": "input_text", "text": prompt}]
 
 
 def _raise_for_non_result(response: Any) -> None:
@@ -162,34 +172,70 @@ def _raise_for_non_result(response: Any) -> None:
                 raise RuntimeError(f"The AI could not process this file: {item.refusal}")
 
 
-def extract_training_plan_with_ai(
-    path: str | Path,
+def _chunk_prompt(start_page: int, end_page: int, total_pages: int) -> str:
+    page_label = (
+        f"original page {start_page}"
+        if start_page == end_page
+        else f"original pages {start_page}-{end_page}"
+    )
+    return (
+        f"{EXTRACTION_PROMPT}\n\n"
+        "PDF coverage contract:\n"
+        f"- This file contains {page_label} of a {total_pages}-page source PDF.\n"
+        "- Extract every scheduled event visible on every supplied page, including "
+        "the bottom row and the final supplied page.\n"
+        "- Use the original source page number in source_reference.\n"
+        "- Do not return early merely because a month or week appears complete.\n"
+        "- If any supplied page or row cannot be read, name that page in warnings."
+    )
+
+
+def _date_span_from_texts(texts: list[str]) -> tuple[str | None, str | None]:
+    date_tokens: list[str] = []
+    patterns = (
+        r"\b\d{1,2}-[A-Za-z]{3}-\d{2,4}\b",
+        r"\b\d{4}-\d{1,2}-\d{1,2}\b",
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+    )
+    for text in texts:
+        for pattern in patterns:
+            date_tokens.extend(re.findall(pattern, text or ""))
+
+    if not date_tokens:
+        return None, None
+    parsed = pd.to_datetime(
+        pd.Series(date_tokens),
+        format="mixed",
+        dayfirst=True,
+        errors="coerce",
+    )
+    parsed = parsed.dropna()
+    if parsed.empty:
+        return None, None
+    return parsed.min().strftime("%Y-%m-%d"), parsed.max().strftime("%Y-%m-%d")
+
+
+def _pdf_date_span(reader: PdfReader) -> tuple[str | None, str | None]:
+    return _date_span_from_texts(
+        [(page.extract_text() or "") for page in reader.pages]
+    )
+
+
+def _request_extraction(
+    client: Any,
+    source_path: Path,
     *,
-    api_key: str,
-    client: Any | None = None,
-) -> dict[str, Any]:
-    """Extract a training plan with GPT-5.6 Luna Structured Outputs."""
-    source_path = Path(path)
-    if not source_path.is_file():
-        raise FileNotFoundError(f"Training plan was not found: {source_path}")
-    if not api_key.strip():
-        raise ValueError("Set OPENAI_API_KEY in Streamlit Secrets before using AI reading.")
-
-    if client is None:
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError("Install the OpenAI Python package from requirements.txt.") from exc
-        client = OpenAI(api_key=api_key)
-
+    prompt: str,
+) -> tuple[TrainingPlanExtraction, Any]:
     try:
         response = client.responses.parse(
             model=DEFAULT_AI_MODEL,
             store=False,
+            max_output_tokens=MAX_AI_OUTPUT_TOKENS,
             input=[
                 {
                     "role": "user",
-                    "content": build_ai_input(source_path),
+                    "content": build_ai_input(source_path, prompt=prompt),
                 }
             ],
             text_format=TrainingPlanExtraction,
@@ -208,7 +254,168 @@ def extract_training_plan_with_ai(
     parsed = getattr(response, "output_parsed", None)
     if parsed is None:
         raise RuntimeError("The AI returned no structured training-plan data.")
+    return parsed, response
 
+
+def _merge_extraction_chunks(
+    chunks: list[tuple[int, int, TrainingPlanExtraction, Any]],
+    *,
+    total_pages: int,
+    source_date_span: tuple[str | None, str | None] = (None, None),
+) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    response_ids: list[str] = []
+    document_title = ""
+    response_model = DEFAULT_AI_MODEL
+
+    for start_page, end_page, parsed, response in chunks:
+        document_title = document_title or parsed.document_title
+        response_model = getattr(response, "model", response_model)
+        response_id = str(getattr(response, "id", "") or "")
+        if response_id:
+            response_ids.append(response_id)
+        records.extend(event.model_dump() for event in parsed.events)
+        page_label = str(start_page) if start_page == end_page else f"{start_page}-{end_page}"
+        warnings.extend(
+            f"Pages {page_label}: {warning}"
+            for warning in parsed.warnings
+        )
+        if not parsed.events:
+            warnings.append(
+                f"Pages {page_label} produced no scheduled events. Confirm those pages are intentionally empty."
+            )
+
+    events = pd.DataFrame(records, columns=EVENT_COLUMNS)
+    event_date_start = None
+    event_date_end = None
+    if not events.empty:
+        event_identity = [
+            "date",
+            "start_time",
+            "end_time",
+            "conduct",
+            "location",
+            "remarks",
+        ]
+        events = events.drop_duplicates(subset=event_identity, keep="first")
+        events["_date_sort"] = pd.to_datetime(events["date"], errors="coerce")
+        valid_event_dates = events["_date_sort"].dropna()
+        if not valid_event_dates.empty:
+            event_date_start = valid_event_dates.min().strftime("%Y-%m-%d")
+            event_date_end = valid_event_dates.max().strftime("%Y-%m-%d")
+        events = (
+            events.sort_values(
+                ["_date_sort", "start_time", "end_time", "conduct"],
+                kind="stable",
+                na_position="last",
+            )
+            .drop(columns="_date_sort")
+            .reset_index(drop=True)
+        )
+
+    source_date_start, source_date_end = source_date_span
+    if source_date_end and event_date_end:
+        source_end_month = pd.Period(source_date_end, freq="M")
+        event_end_month = pd.Period(event_date_end, freq="M")
+        if event_end_month < source_end_month:
+            warnings.insert(
+                0,
+                "Possible incomplete extraction: the PDF reaches "
+                f"{source_end_month.strftime('%B %Y')}, but extracted events stop in "
+                f"{event_end_month.strftime('%B %Y')}. Review the final page groups.",
+            )
+
+    page_ranges = [
+        str(start_page) if start_page == end_page else f"{start_page}-{end_page}"
+        for start_page, end_page, _, _ in chunks
+    ]
+    return {
+        "document_title": document_title,
+        "events": events,
+        "warnings": list(dict.fromkeys(warnings)),
+        "model": response_model,
+        "response_id": response_ids[0] if response_ids else "",
+        "response_ids": response_ids,
+        "source_page_count": total_pages,
+        "chunks_processed": len(chunks),
+        "page_ranges": page_ranges,
+        "coverage_label": f"{total_pages}/{total_pages} PDF pages",
+        "source_date_start": source_date_start,
+        "source_date_end": source_date_end,
+        "event_date_start": event_date_start,
+        "event_date_end": event_date_end,
+    }
+
+
+def extract_training_plan_with_ai(
+    path: str | Path,
+    *,
+    api_key: str,
+    client: Any | None = None,
+) -> dict[str, Any]:
+    """Extract a training plan with GPT-5.6 Luna Structured Outputs."""
+    source_path = Path(path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Training plan was not found: {source_path}")
+    if not api_key.strip():
+        raise ValueError("Set OPENAI_API_KEY in Streamlit Secrets before using AI reading.")
+    if source_path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        raise ValueError(
+            "AI reading supports PDF, PNG, JPG, WEBP, GIF, CSV, TSV, XLS, XLSX, and XLSM files."
+        )
+    if source_path.stat().st_size >= MAX_AI_FILE_BYTES:
+        raise ValueError("The AI input must be smaller than 50 MB.")
+
+    if client is None:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("Install the OpenAI Python package from requirements.txt.") from exc
+        client = OpenAI(api_key=api_key)
+
+    if source_path.suffix.lower() == ".pdf":
+        try:
+            reader = PdfReader(source_path)
+            total_pages = len(reader.pages)
+        except Exception as exc:
+            raise ValueError("The PDF could not be opened for complete page-by-page extraction.") from exc
+        if total_pages < 1:
+            raise ValueError("The PDF contains no pages.")
+        source_date_span = _pdf_date_span(reader)
+
+        chunks: list[tuple[int, int, TrainingPlanExtraction, Any]] = []
+        with tempfile.TemporaryDirectory(prefix="tp_ai_pdf_") as temp_dir:
+            temp_path = Path(temp_dir)
+            for first_index in range(0, total_pages, PDF_PAGES_PER_REQUEST):
+                last_index = min(first_index + PDF_PAGES_PER_REQUEST, total_pages)
+                start_page = first_index + 1
+                end_page = last_index
+                writer = PdfWriter()
+                for page_index in range(first_index, last_index):
+                    writer.add_page(reader.pages[page_index])
+                chunk_path = temp_path / (
+                    f"{source_path.stem}_pages_{start_page:03d}-{end_page:03d}.pdf"
+                )
+                with chunk_path.open("wb") as chunk_file:
+                    writer.write(chunk_file)
+                parsed, response = _request_extraction(
+                    client,
+                    chunk_path,
+                    prompt=_chunk_prompt(start_page, end_page, total_pages),
+                )
+                chunks.append((start_page, end_page, parsed, response))
+        return _merge_extraction_chunks(
+            chunks,
+            total_pages=total_pages,
+            source_date_span=source_date_span,
+        )
+
+    parsed, response = _request_extraction(
+        client,
+        source_path,
+        prompt=EXTRACTION_PROMPT,
+    )
     events = pd.DataFrame(
         [event.model_dump() for event in parsed.events],
         columns=EVENT_COLUMNS,
@@ -219,6 +426,15 @@ def extract_training_plan_with_ai(
         "warnings": list(parsed.warnings),
         "model": getattr(response, "model", DEFAULT_AI_MODEL),
         "response_id": getattr(response, "id", ""),
+        "response_ids": [getattr(response, "id", "")] if getattr(response, "id", "") else [],
+        "source_page_count": None,
+        "chunks_processed": 1,
+        "page_ranges": [],
+        "coverage_label": "Complete uploaded file",
+        "source_date_start": None,
+        "source_date_end": None,
+        "event_date_start": None,
+        "event_date_end": None,
     }
 
 
