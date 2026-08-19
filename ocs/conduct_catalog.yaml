@@ -14,6 +14,12 @@ conducts:
   - Closing
   multi_day: false
   active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: interval_fast_march
   lesson_plan_name: INTERVAL FAST MARCH
   display_name: INTERVAL FAST MARCH
@@ -25,6 +31,12 @@ conducts:
   - Prep
   multi_day: false
   active: true
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 210, days_before: 0, time: '06:00'}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 210, days_before: 0, time: '06:00'}
 - conduct_id: ex_relentless
   lesson_plan_name: EX.RELENTLESS
   display_name: EX.RELENTLESS
@@ -43,7 +55,13 @@ conducts:
   - Recovery
   multi_day: true
   active: true
+  bus_required: false
   exercise_display_name: Ex. Relentless Warrior
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: m203_live_firing
   lesson_plan_name: M203 L/F
   display_name: M203 L/F
@@ -66,6 +84,12 @@ conducts:
   - Refresher
   multi_day: false
   active: true
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 1065, days_before: 0, time: '04:45'}
+    ammo_collection: {duration_minutes: 690, days_before: 0, time: '05:30'}
+    transport: {duration_minutes: 585, days_before: 0, time: '06:15'}
+    vehicle: {duration_minutes: 1065, days_before: 0, time: '04:45'}
 - conduct_id: mat_live_firing
   lesson_plan_name: MAT / M203 LIVE FIRING
   display_name: MAT / M203 LIVE FIRING
@@ -84,6 +108,12 @@ conducts:
   - IGTS
   multi_day: false
   active: true
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: gpmg_live_firing
   lesson_plan_name: GPMG L/F
   display_name: GPMG L/F
@@ -106,6 +136,12 @@ conducts:
   - Refresher
   multi_day: false
   active: true
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 1305, days_before: 0, time: '04:45'}
+    ammo_collection: {duration_minutes: 1140, days_before: 0, time: '05:30'}
+    transport: {duration_minutes: 1125, days_before: 0, time: '06:15'}
+    vehicle: {duration_minutes: 1305, days_before: 0, time: '04:45'}
 - conduct_id: ptco_jvlf
   lesson_plan_name: PTCO JVLF
   display_name: PTCO JVLF
@@ -114,21 +150,29 @@ conducts:
   - PTCO JVLF
   - PTCO Judgemental Video IGTS
   - PTCO Judgmental Video Training
-  exclusions: []
+  exclusions:
+  - Rehearsals
+  - Final Inspection
   multi_day: false
   active: true
-- conduct_id: xaw
-  lesson_plan_name: XAW
-  display_name: XAW
-  use_display_name: false
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 810, days_before: 0, time: '0630'}
+    transport: {duration_minutes: 690, days_before: 0, time: '0700'}
+    vehicle: {duration_minutes: 420, days_before: 0, time: '0600'}
+- conduct_id: xaw_co_uo
+  lesson_plan_name: Ex Adaptive Warrior ( CO + UO)
+  display_name: Ex Adaptive Warrior ( CO + UO)
+  use_display_name: true
   aliases:
   - XAW
   - Adaptive Warrior
   - Harbouring Routine
   - UO Drills
   - PTCO
-  - Compass
-  - Pengun
+  - Grass Drills
+  - PTCO SDI
   exclusions:
   - Prep
   - Inspection
@@ -140,7 +184,43 @@ conducts:
   - JVLF
   multi_day: true
   active: true
-  exercise_display_name: Ex Adaptive Warrior
+  bus_required: false
+  exercise_display_name: Ex Adaptive Warrior ( CO + UO)
+  preparation:
+    medic: {duration_minutes: 2220, days_before: 0, time: '08:00'}
+    ammo_collection: {duration_minutes: 2430, days_before: 0, time: '05:30'}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 2430, days_before: 0, time: '05:30'}
+- conduct_id: xaw_compass_pf
+  lesson_plan_name: Compass Course + PF LF
+  display_name: Compass Course + PF LF
+  use_display_name: true
+  aliases:
+  - Prismatic Compass Course
+  - Compass Course (Day)
+  - Compass Course (Night)
+  - Pengun Live Firing
+  - Pengun
+  - PF LF
+  - Trip Flare Demo
+  exclusions:
+  - Prep
+  - Inspection
+  - SDL
+  - Brief
+  - Chat
+  - Clarification
+  - Calibration
+  - Fireside
+  - JVLF
+  multi_day: false
+  active: true
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 1019, days_before: 0, time: '07:00'}
+    ammo_collection: {duration_minutes: 1020, days_before: 0, time: '05:30'}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 1109, days_before: 0, time: '05:30'}
 - conduct_id: distance_interval
   lesson_plan_name: DISTANCE INTERVAL
   display_name: DISTANCE INTERVAL
@@ -149,7 +229,13 @@ conducts:
   - Distance Interval
   exclusions: []
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: metabolic_circuit
   lesson_plan_name: METABOLIC CIRCUIT
   display_name: METABOLIC CIRCUIT
@@ -159,7 +245,13 @@ conducts:
   exclusions:
   - Prep
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: endurance_run_30_min
   lesson_plan_name: ENDURANCE RUN - 30 MIN
   display_name: ENDURANCE RUN - 30 MIN
@@ -169,7 +261,13 @@ conducts:
   exclusions:
   - Prep
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: combat_circuit
   lesson_plan_name: COMBAT CIRCUIT
   display_name: COMBAT CIRCUIT
@@ -179,7 +277,13 @@ conducts:
   exclusions:
   - Prep
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: ippt
   lesson_plan_name: IPPT
   display_name: IPPT
@@ -189,6 +293,26 @@ conducts:
   exclusions: []
   multi_day: false
   active: true
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 240, days_before: 0, time: '05:30'}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 240, days_before: 0, time: '05:30'}
+- conduct_id: signal_package
+  lesson_plan_name: SIGNAL PACKAGE
+  display_name: Signal Package
+  use_display_name: false
+  aliases: []
+  exclusions: []
+  multi_day: false
+  active: true
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: ne_tour
   lesson_plan_name: NE TOUR
   display_name: NE TOUR
@@ -199,6 +323,12 @@ conducts:
   exclusions: []
   multi_day: false
   active: true
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: army_combat_fitness_check
   lesson_plan_name: ARMY COMBAT FITNESS CHECK
   display_name: ARMY COMBAT FITNESS CHECK
@@ -209,6 +339,12 @@ conducts:
   exclusions: []
   multi_day: false
   active: true
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: demolition_tht
   lesson_plan_name: DEMOLITION THT
   display_name: DEMOLITION THT
@@ -229,7 +365,13 @@ conducts:
   - EX
   - Exercise
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: mat_m203_igts
   lesson_plan_name: MAT/M203 IGTS
   display_name: MAT/M203 IGTS
@@ -251,7 +393,13 @@ conducts:
   - Refresher
   - GPMG
   multi_day: false
-  active: true
+  active: false
+  bus_required: false
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: ex_hunter
   lesson_plan_name: Ex. HUNTER
   display_name: Ex. HUNTER
@@ -271,7 +419,13 @@ conducts:
   - Fireside
   - JVLF
   multi_day: false
-  active: true
+  active: false
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 0, days_before: null, time: ''}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 - conduct_id: ex_cougar
   lesson_plan_name: Ex. COUGAR
   display_name: Ex. COUGAR
@@ -292,7 +446,35 @@ conducts:
   - JVLF
   - Rehearsals
   multi_day: false
-  active: false
+  active: true
+  bus_required: true
+  preparation:
+    
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 780, days_before: 0, time: '0700'}
+    transport: {duration_minutes: 690, days_before: 0, time: '0700'}
+    vehicle: {duration_minutes: 840, days_before: 0, time: '0600'}
+- conduct_id: lmg_qualification_shoot
+  lesson_plan_name: LMG QUALIFICATION SHOOT
+  display_name: LMG Qualification Shoot
+  use_display_name: true
+  aliases:
+  - LMG Qualification Shoot
+  - LMG Qual Shoot
+  exclusions:
+  - Prep
+  - Inspection
+  - Brief
+  - Theory
+  - SDL
+  multi_day: false
+  active: true
+  bus_required: true
+  preparation:
+    medic: {duration_minutes: 0, days_before: null, time: ''}
+    ammo_collection: {duration_minutes: 0, days_before: null, time: ''}
+    transport: {duration_minutes: 600, days_before: 0, time: '07:00'}
+    vehicle: {duration_minutes: 0, days_before: null, time: ''}
 recce_rules:
 - lesson_plan_name: XAW RECCE
   aliases:

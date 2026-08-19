@@ -13,7 +13,7 @@ import os
 import posixpath
 import zipfile
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from urllib.parse import urlencode
 from email.mime.multipart import MIMEMultipart
@@ -38,6 +38,31 @@ DEFAULT_CONDUCT_CATALOG_PATH = os.path.join(
     "conduct_catalog.yaml",
 )
 
+PREPARATION_ITEMS = ("medic", "ammo_collection", "transport", "vehicle")
+PREPARATION_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def _default_preparation_item():
+    return {
+        "duration_minutes": 0,
+        "days_before": None,
+        "time": "",
+    }
+
+
+def _ensure_preparation_fields(conduct):
+    conduct.setdefault("bus_required", False)
+    preparation = conduct.setdefault("preparation", {})
+    if not isinstance(preparation, dict):
+        return
+    for item_name in PREPARATION_ITEMS:
+        item = preparation.setdefault(item_name, _default_preparation_item())
+        if not isinstance(item, dict):
+            continue
+        item.setdefault("duration_minutes", 0)
+        item.setdefault("days_before", None)
+        item.setdefault("time", "")
+
 
 def normalize_conduct_name(value):
     """Normalize formatting while preserving meaningful numbers such as 4KM."""
@@ -53,6 +78,8 @@ def load_conduct_catalog(path=None):
     catalog.setdefault("version", 1)
     catalog.setdefault("conducts", [])
     catalog.setdefault("recce_rules", [])
+    for conduct in catalog["conducts"]:
+        _ensure_preparation_fields(conduct)
     return catalog
 
 
@@ -87,12 +114,59 @@ def validate_conduct_catalog(catalog, lesson_plan_names=None):
         elif lesson_index and normalize_conduct_name(target) not in lesson_index:
             errors.append(f"{conduct_id} targets a missing lesson-plan conduct: {target}")
 
+        if not isinstance(conduct.get("bus_required", False), bool):
+            errors.append(
+                f"{conduct_id or f'row {row_number}'} bus_required must be true or false."
+            )
+
         for alias in conduct.get("aliases", []):
             normalized_alias = normalize_conduct_name(alias)
             if not normalized_alias:
                 errors.append(f"{conduct_id} contains a blank alias.")
                 continue
             seen_aliases[normalized_alias].add(conduct_id)
+
+        preparation = conduct.get("preparation", {})
+        if not isinstance(preparation, dict):
+            errors.append(
+                f"{conduct_id or f'row {row_number}'} preparation must be a mapping."
+            )
+            continue
+        for item_name in PREPARATION_ITEMS:
+            label = item_name.replace("_", " ")
+            item = preparation.get(item_name, {})
+            if not isinstance(item, dict):
+                errors.append(
+                    f"{conduct_id or f'row {row_number}'} {label} preparation must be a mapping."
+                )
+                continue
+
+            duration = item.get("duration_minutes", 0)
+            if isinstance(duration, bool) or not isinstance(duration, int) or duration < 0:
+                errors.append(
+                    f"{conduct_id or f'row {row_number}'} {label} minutes must be a non-negative whole number."
+                )
+
+            days_before = item.get("days_before")
+            time_value = str(item.get("time", "") or "").strip()
+            has_days = days_before not in (None, "")
+            has_time = bool(time_value)
+            if has_days != has_time:
+                errors.append(
+                    f"{conduct_id or f'row {row_number}'} {label} days-before and time must both be set or both be blank."
+                )
+            if has_days and (
+                isinstance(days_before, bool)
+                or not isinstance(days_before, int)
+                or days_before < 0
+            ):
+                errors.append(
+                    f"{conduct_id or f'row {row_number}'} {label} days-before must be a non-negative whole number."
+                )
+            if has_time and not PREPARATION_TIME_PATTERN.fullmatch(time_value):
+                errors.append(
+                    f"{conduct_id or f'row {row_number}'} {label} time must use 24-hour HH:MM."
+                )
 
     for alias, conduct_ids in seen_aliases.items():
         active_ids = {
@@ -106,6 +180,55 @@ def validate_conduct_catalog(catalog, lesson_plan_names=None):
                 + ", ".join(sorted(active_ids))
             )
     return errors
+
+
+def build_preparation_schedule(conduct_rule, activity_date, activity_start_time=None):
+    """Calculate the three preparation windows for a scheduled conduct."""
+    activity_day = datetime.strptime(activity_date, "%Y-%m-%d").date()
+    activity_start = None
+    if activity_start_time:
+        activity_start = datetime.combine(
+            activity_day,
+            datetime.strptime(activity_start_time, "%H:%M").time(),
+        )
+    preparation = conduct_rule.get("preparation", {})
+    schedule = []
+
+    for item_name in PREPARATION_ITEMS:
+        item = preparation.get(item_name, {})
+        duration = int(item.get("duration_minutes", 0) or 0)
+        days_before = item.get("days_before")
+        configured_time = str(item.get("time", "") or "").strip()
+
+        if days_before not in (None, "") and configured_time:
+            scheduled_start = datetime.combine(
+                activity_day - timedelta(days=int(days_before)),
+                datetime.strptime(configured_time, "%H:%M").time(),
+            )
+            scheduled_end = scheduled_start + timedelta(minutes=duration)
+        elif activity_start is not None:
+            scheduled_end = activity_start
+            scheduled_start = scheduled_end - timedelta(minutes=duration)
+        else:
+            scheduled_start = None
+            scheduled_end = None
+
+        schedule.append({
+            "item": item_name,
+            "duration_minutes": duration,
+            "start": scheduled_start,
+            "end": scheduled_end,
+        })
+
+    return schedule
+
+
+def calculate_40_seater_buses(cadet_size):
+    """Return the minimum number of 40-seater buses for the cadet strength."""
+    cadets = int(cadet_size)
+    if cadets < 0:
+        raise ValueError("cadet_size must not be negative")
+    return (cadets + 39) // 40
 
 
 def match_catalog_conduct(conduct_text, catalog, lesson_name_index):
@@ -313,12 +436,7 @@ ammo_types = [
     "DIRECTIONAL FRAGMENTATION CHARGE M18A1",
     "SIM THUNFLASH NON-ELEC",
     "THUNDERFLASH,ELECTRIC",
-    "AMMANOL",
-    "DETONATOR,NON-ELEC NO.8",
-    "MATCH SAFETY 1.9 INCH",
-    "FUSE BLASTING TIME SAFETY,15.24M/EA",
     "GRENADE HAND SMOKE SCREENING N452",
-    "FDD NO.41,W/STAINLESS STL,INNER TUBE",
     "DEMO KIT BANGALORE TORPEDO NO 21",
 ]
 
@@ -350,38 +468,172 @@ signal_types = [
 ]
 
 SIAO_MAPPING_VEHICLES = {
-    "OUV": 176,
-    "SOUV": 177,
-    "5-Ton": 178,
-    "GP Car": 179,
-    "Other Vehicles (Boats, Trailers, F550)": 180,
-    "TO": 181,
-    "Reporting Venue": 182,
-    "Destination Venue": 183,
-    "Parkover": 184,
-    "Remarks": 185,
-    "Indent ID": 186,
-    "20 - seater": 192,
-    "40 - seater": 193,
-    "15 Ton Lorry": 194,
-    "1 way / 2 way / Disposal": 195,
-    "POC + Contact Number": 196,
-    "Indent ID2": 197,
-    "RPL From": 200,
-    "RPL To": 201,
-    "RPL Vehicle Details (with Authorised Troops)": 202,
-    "Fast Craft From": 204,
-    "Fast Craft To": 205,
-    "Fast Craft Details (with Authorised Troops)": 206,
-    "ICCT Instructors": 219,
-    "SOC Key": 220,
-    "Link Bridge Key": 221,
-    "M1 Gate Key": 222,
-    "Others": 223,
+    "LUV (HQ)": 176,
+    "MB290 (HQ)": 177,
+    "LUV (PLC)": 178,
+    "SOUV": 179,
+    "5-Ton": 180,
+    "GP Car": 181,
+    "Other Vehicles (Boats, Trailers, F550)": 182,
+    "TO": 183,
+    "Reporting Venue": 184,
+    "Destination Venue": 185,
+    "Parkover": 186,
+    "Remarks": 187,
+    "Indent ID": 188,
+    "20 - seater": 194,
+    "40 - seater": 195,
+    "15 Ton Lorry": 196,
+    "1 way / 2 way / Disposal": 197,
+    "POC + Contact Number": 198,
+    "Indent ID2": 199,
+    "RPL From": 202,
+    "RPL To": 203,
+    "RPL Vehicle Details (with Authorised Troops)": 204,
+    "Fast Craft From": 206,
+    "Fast Craft To": 207,
+    "Fast Craft Details (with Authorised Troops)": 208,
+    "ICCT Instructors": 221,
+    "SOC Key": 222,
+    "Link Bridge Key": 223,
+    "M1 Gate Key": 224,
+    "Others": 225,
 }
 
+
+def resolve_siao_vehicle_columns(lesson_plan):
+    """Resolve vehicle columns from lesson-plan headers without overrunning older files."""
+    if lesson_plan.empty:
+        return {}
+
+    transport_columns = [
+        column
+        for column in range(lesson_plan.shape[1])
+        if _normalized_siao_header(lesson_plan.columns[column]) == "transport"
+    ]
+    candidate_columns = transport_columns or list(range(lesson_plan.shape[1]))
+
+    header_values = {}
+    for column in candidate_columns:
+        values = []
+        for row in range(min(2, lesson_plan.shape[0])):
+            values.append(_normalized_siao_header(lesson_plan.iloc[row, column]))
+        header_values[column] = values
+
+    resolved = {}
+    direct_headers = {
+        "LUV (HQ)": {"luv (hq)"},
+        "MB290 (HQ)": {"mb290 (hq)"},
+        "LUV (PLC)": {"luv (plc)"},
+        "SOUV": {"souv"},
+        "5-Ton": {"5-ton", "5 ton"},
+        "GP Car": {"gp car"},
+        "Other Vehicles (Boats, Trailers, F550)": {
+            "other vehicles (boats, trailers, f550)"
+        },
+        "TO": {"to"},
+        "Reporting Venue": {"reporting venue"},
+        "Destination Venue": {"destination venue"},
+        "Parkover": {"parkover"},
+        "Remarks": {"remarks"},
+        "20 - seater": {"20 - seater", "20-seater"},
+        "40 - seater": {"40 - seater", "40-seater"},
+        "15 Ton Lorry": {"15 ton lorry", "60 - seater", "60-seater"},
+        "1 way / 2 way / Disposal": {"1 way / 2 way / disposal"},
+        "POC + Contact Number": {"poc + contact number"},
+        "ICCT Instructors": {"icct instructors"},
+        "SOC Key": {"soc key"},
+        "Link Bridge Key": {"link bridge key"},
+        "M1 Gate Key": {"m1 gate key"},
+        "Others": {"others"},
+    }
+    for key, labels in direct_headers.items():
+        match = next(
+            (
+                column
+                for column in candidate_columns
+                if any(value in labels for value in header_values[column])
+            ),
+            None,
+        )
+        if match is not None:
+            resolved[key] = match
+
+    indent_columns = [
+        column
+        for column in candidate_columns
+        if "indent id" in header_values[column]
+    ]
+    if indent_columns:
+        resolved["Indent ID"] = indent_columns[0]
+    if len(indent_columns) > 1:
+        resolved["Indent ID2"] = indent_columns[1]
+
+    military_column = next(
+        (
+            column
+            for column in candidate_columns
+            if "military" in header_values[column]
+        ),
+        None,
+    )
+    if military_column is not None:
+        venue_column = next(
+            (
+                column
+                for column in range(
+                    military_column + 1,
+                    min(military_column + 10, lesson_plan.shape[1]),
+                )
+                if "venue" in header_values.get(column, [])
+            ),
+            None,
+        )
+        if venue_column is not None:
+            for column in range(
+                venue_column,
+                min(venue_column + 3, lesson_plan.shape[1]),
+            ):
+                values = header_values.get(column, [])
+                if "from" in values:
+                    resolved["Military Transport Venue From"] = column
+                elif "to" in values:
+                    resolved["Military Transport Venue To"] = column
+
+    def resolve_section(parent_label, prefix):
+        parent_column = next(
+            (
+                column
+                for column in candidate_columns
+                if parent_label in header_values[column]
+            ),
+            None,
+        )
+        if parent_column is None:
+            return
+        for column in range(
+            parent_column + 1,
+            min(parent_column + 6, lesson_plan.shape[1]),
+        ):
+            values = [
+                _normalized_siao_header(lesson_plan.iloc[row, column])
+                for row in range(min(2, lesson_plan.shape[0]))
+            ]
+            if "from" in values:
+                resolved[f"{prefix} From"] = column
+            elif "to" in values:
+                resolved[f"{prefix} To"] = column
+            elif any("vehicle details" in value for value in values):
+                resolved[f"{prefix} Vehicle Details (with Authorised Troops)"] = column
+
+    resolve_section("rpl", "RPL")
+    resolve_section("fast craft", "Fast Craft")
+    return resolved
+
 vehicle_types = [
-    "OUV",
+    "LUV (HQ)",
+    "MB290 (HQ)",
+    "LUV (PLC)",
     "SOUV",
     "5-Ton",
     "GP Car",
@@ -420,6 +672,87 @@ SIAO_MANUAL_INPUT_FILL = PatternFill(
     fill_type="solid",
     fgColor="FFFFF2CC",
 )
+
+SIAO_DATETIME_FORMAT = "%d/%b/%Y %H:%M"
+
+
+def _normalized_siao_header(value):
+    return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def resolve_siao_output_columns(ws):
+    """Resolve the SIAO fields whose columns differ between template versions."""
+    resolved = {
+        "medic_start": column_index_from_string("M"),
+        "medic_end": column_index_from_string("N"),
+        "ammo_collection_start": column_index_from_string("R"),
+        "ammo_collection_end": column_index_from_string("S"),
+    }
+
+    military_transport_column = None
+    for row in range(9, 12):
+        for column in range(1, ws.max_column + 1):
+            header = _normalized_siao_header(ws.cell(row, column).value)
+            if header == "military transport":
+                military_transport_column = column
+            elif (
+                column > column_index_from_string("AZ")
+                and header in {"start: date / timing", "start: date/timing"}
+            ):
+                resolved["general_transport_start"] = column
+            elif (
+                column > column_index_from_string("AZ")
+                and header in {"end: date / timing", "end: date/timing"}
+            ):
+                resolved["general_transport_end"] = column
+            elif header in {"40 - seater", "40-seater"}:
+                resolved["forty_seater"] = column
+
+    if military_transport_column is not None:
+        for column in range(
+            military_transport_column + 1,
+            min(military_transport_column + 10, ws.max_column + 1),
+        ):
+            header = _normalized_siao_header(ws.cell(11, column).value)
+            if header == "from" and "transport_start" not in resolved:
+                resolved["transport_start"] = column
+            elif header == "to" and "transport_end" not in resolved:
+                resolved["transport_end"] = column
+
+        transport_venue_column = next(
+            (
+                column
+                for column in range(
+                    military_transport_column + 1,
+                    min(military_transport_column + 10, ws.max_column + 1),
+                )
+                if _normalized_siao_header(ws.cell(10, column).value) == "venue"
+            ),
+            None,
+        )
+        if transport_venue_column is not None:
+            for column in range(
+                transport_venue_column,
+                min(transport_venue_column + 3, ws.max_column + 1),
+            ):
+                header = _normalized_siao_header(ws.cell(11, column).value)
+                if header == "from":
+                    resolved["transport_venue_from"] = column
+                elif header == "to":
+                    resolved["transport_venue_to"] = column
+
+    return resolved
+
+
+def _timetable_start_time(value):
+    """Return the first 24-hour time from a timetable range as HH:MM."""
+    match = re.search(
+        r"(?<!\d)([01]?\d|2[0-3]):?([0-5]\d)(?!\d)",
+        str(value or ""),
+    )
+    if not match:
+        return None
+    return f"{int(match.group(1)):02d}:{match.group(2)}"
 
 
 def _has_siao_allocation(value):
@@ -707,33 +1040,6 @@ def dataframe_to_email_table(dataframe):
             "<td>",
             '<td style="padding:8px 10px;border:1px solid #d7ded9;vertical-align:top;">',
         )
-    )
-
-
-def sort_booking_dataframe(dataframe):
-    """Order bookings chronologically without changing their displayed values."""
-    if dataframe.empty:
-        return dataframe.reset_index(drop=True)
-
-    sortable = dataframe.copy()
-    sortable["_start_date"] = pd.to_datetime(
-        sortable["START DATE"],
-        format="%d-%b-%y",
-        errors="coerce",
-    )
-    sortable["_start_time"] = pd.to_timedelta(
-        sortable["START TIME"].astype(str) + ":00",
-        errors="coerce",
-    )
-    return (
-        sortable.sort_values(
-            ["_start_date", "_start_time", "FACILITY"],
-            ascending=True,
-            na_position="last",
-            kind="stable",
-        )
-        .drop(columns=["_start_date", "_start_time"])
-        .reset_index(drop=True)
     )
 
 
@@ -1042,13 +1348,15 @@ class Extractor:
         self.lesson_plan = lesson_plan
         lesson_names = lesson_plan.iloc[2:, 2].dropna().astype(str)
         self.lesson_name_index = {}
+        self.lesson_row_index = {}
         self.lesson_name_conflicts = []
-        for lesson_name in lesson_names:
+        for row_index, lesson_name in lesson_names.items():
             normalized = normalize_conduct_name(lesson_name)
             if normalized in self.lesson_name_index:
                 self.lesson_name_conflicts.append(normalized)
             else:
                 self.lesson_name_index[normalized] = lesson_name
+                self.lesson_row_index[normalized] = row_index
         self.catalog_validation_errors = validate_conduct_catalog(
             self.conduct_catalog,
             lesson_names,
@@ -1075,12 +1383,14 @@ class Extractor:
                 )
             )
         )
-        # print(conduct_mapping)
+        print(conduct_mapping)
 
         template_path = self.siao_template_path
 
         wb = openpyxl.load_workbook(template_path)
         ws = wb["(Fill In) SIAO"]
+        output_columns = resolve_siao_output_columns(ws)
+        vehicle_columns = resolve_siao_vehicle_columns(self.lesson_plan)
 
         start_row = 13
         processed = set()
@@ -1094,12 +1404,11 @@ class Extractor:
                     continue
                 processed.add((display_name, c))
 
-                matches = self.siao_conducts[self.siao_conducts == match_name]
-
-                if matches.empty:
+                row_num = self.lesson_row_index.get(
+                    normalize_conduct_name(match_name)
+                )
+                if row_num is None:
                     continue
-
-                row_num = matches.index[0]
                 l = []
 
                 try:
@@ -1117,6 +1426,28 @@ class Extractor:
                 else:
                     start_date = c
                     end_date = c
+
+                rule = self.catalog_rule_for_target(match_name)
+                preparation_schedule = {}
+                if rule:
+                    activity_start_time = self.conduct_start_times.get(
+                        (start_date, normalize_conduct_name(match_name))
+                    )
+                    try:
+                        activity_date = datetime.strptime(
+                            start_date,
+                            "%d-%b-%y",
+                        ).strftime("%Y-%m-%d")
+                        preparation_schedule = {
+                            item["item"]: item
+                            for item in build_preparation_schedule(
+                                rule,
+                                activity_date,
+                                activity_start_time,
+                            )
+                        }
+                    except (TypeError, ValueError):
+                        preparation_schedule = {}
                 # Conduct details + Medic
                 l.extend([
                     display_name,
@@ -1142,10 +1473,6 @@ class Extractor:
                 ])
 
                 for ammo in ammo_types:
-                    if ammo == "AMMANOL":
-                        l.append(0)
-                        continue
-
                     l.append(
                         int(self.lesson_plan.iloc[row_num, SIAO_MAPPING_ARMS[ammo]])
                         * cadet_size
@@ -1175,11 +1502,11 @@ class Extractor:
                         l.extend(["-"] * 12)
                         continue
 
+                    source_column = vehicle_columns.get(vehicle)
                     l.append(
-                        self.lesson_plan.iloc[
-                            row_num,
-                            SIAO_MAPPING_VEHICLES[vehicle]
-                        ]
+                        self.lesson_plan.iloc[row_num, source_column]
+                        if source_column is not None
+                        else "-"
                     )
 
                 # Others End Placeholder
@@ -1188,6 +1515,76 @@ class Extractor:
                 # Write row into Excel starting from column C
                 for col_num, value in enumerate(l, start=3):
                     ws.cell(row=start_row, column=col_num, value=value)
+
+                for source_key, output_key in (
+                    ("Military Transport Venue From", "transport_venue_from"),
+                    ("Military Transport Venue To", "transport_venue_to"),
+                ):
+                    source_column = vehicle_columns.get(source_key)
+                    output_column = output_columns.get(output_key)
+                    if source_column is None or output_column is None:
+                        continue
+                    source_value = self.lesson_plan.iloc[row_num, source_column]
+                    if pd.isna(source_value) or not str(source_value).strip():
+                        source_value = "-"
+                    ws.cell(
+                        row=start_row,
+                        column=output_column,
+                        value=source_value,
+                    )
+
+                preparation_cells = {
+                    "medic": [("medic_start", "medic_end")],
+                    "ammo_collection": [(
+                        "ammo_collection_start",
+                        "ammo_collection_end",
+                    )],
+                    "transport": [("transport_start", "transport_end")],
+                    "vehicle": [(
+                        "general_transport_start",
+                        "general_transport_end",
+                    )],
+                }
+                for item_name, column_pairs in preparation_cells.items():
+                    if item_name == "transport" and not (
+                        rule and rule.get("bus_required", False)
+                    ):
+                        continue
+                    schedule_item = preparation_schedule.get(item_name, {})
+                    for start_key, end_key in column_pairs:
+                        if (
+                            schedule_item.get("duration_minutes", 0) > 0
+                            and schedule_item.get("start") is not None
+                            and schedule_item.get("end") is not None
+                            and start_key in output_columns
+                            and end_key in output_columns
+                        ):
+                            ws.cell(
+                                row=start_row,
+                                column=output_columns[start_key],
+                                value=schedule_item["start"].strftime(
+                                    SIAO_DATETIME_FORMAT
+                                ),
+                            )
+                            ws.cell(
+                                row=start_row,
+                                column=output_columns[end_key],
+                                value=schedule_item["end"].strftime(
+                                    SIAO_DATETIME_FORMAT
+                                ),
+                            )
+
+                if rule and "forty_seater" in output_columns:
+                    bus_count = (
+                        calculate_40_seater_buses(cadet_size)
+                        if rule.get("bus_required", False)
+                        else "-"
+                    )
+                    ws.cell(
+                        row=start_row,
+                        column=output_columns["forty_seater"],
+                        value=bus_count,
+                    )
 
                 highlight_siao_manual_inputs(ws, start_row)
 
@@ -1203,6 +1600,8 @@ class Extractor:
         date_conduct_mapping = {}
         cl = {}
         self.match_report = []
+        self.conduct_start_times = {}
+        timetable_times = self.data.iloc[:, 0]
 
         for i, column in enumerate(conduct_list.columns):
             date = (
@@ -1213,12 +1612,20 @@ class Extractor:
 
             conducts = []
 
-            for conduct in conduct_list.iloc[:, i].dropna():
+            for row_index, conduct in conduct_list.iloc[:, i].dropna().items():
                 if conduct == "":
                     continue
 
+                try:
+                    timetable_value = timetable_times.loc[row_index]
+                    if isinstance(timetable_value, pd.Series):
+                        timetable_value = timetable_value.iloc[0]
+                except (KeyError, IndexError):
+                    timetable_value = None
+                start_time = _timetable_start_time(timetable_value)
+
                 conducts.extend(
-                    c.strip()
+                    (c.strip(), start_time)
                     for c in str(conduct).split(";")
                     if c.strip()
                 )
@@ -1226,7 +1633,7 @@ class Extractor:
             cl[date] = conducts
 
         for date, conducts in cl.items():
-            for conduct in conducts:
+            for conduct, start_time in conducts:
                 if conduct == "LOC":
                     break
 
@@ -1259,6 +1666,14 @@ class Extractor:
                     display_name = conduct
                     if resolution.get("use_display_name") and resolution.get("display_name"):
                         display_name = resolution["display_name"]
+                    if start_time:
+                        self.conduct_start_times.setdefault(
+                            (
+                                date,
+                                normalize_conduct_name(resolution["target"]),
+                            ),
+                            start_time,
+                        )
                     date_conduct_mapping.setdefault(date, []).extend(
                         [resolution["target"], display_name]
                     )
@@ -1479,14 +1894,14 @@ class Extractor:
             "FACILITY", "START DATE", "START TIME",
             "END DATE", "END TIME", "REMARKS/JUSTIFICATIONS", "YOUR EMAIL",
         ]
-        ocs_df = sort_booking_dataframe(pd.DataFrame(ocs_rows, columns=headers))
+        ocs_df = pd.DataFrame(ocs_rows, columns=headers)
         ocs_df.to_csv(output_path, index=False)
 
         print(f"--- OCS Facility Bookings ({len(ocs_df)}) -> {output_path} ---")
         print(ocs_df.to_string(index=False))
 
         # 2. SAFTI facilities -> draft email (not sent yet)
-        safti_df = sort_booking_dataframe(pd.DataFrame(safti_rows, columns=headers))
+        safti_df = pd.DataFrame(safti_rows, columns=headers)
 
         email_intro = "Requesting the following SAFTI facility bookings:"
         table_text = safti_df.to_string(index=False)

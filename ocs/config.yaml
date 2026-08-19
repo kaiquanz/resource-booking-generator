@@ -5,6 +5,12 @@ paths:
   output_folder: "outputs"
   conduct_catalog: "ocs/conduct_catalog.yaml"
 
+timetable:
+  periods:
+    "0":
+      start_time: "07:00"
+      end_time: "07:50"
+
 user:
   email: ""
 

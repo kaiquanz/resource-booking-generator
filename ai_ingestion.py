@@ -172,14 +172,41 @@ def _raise_for_non_result(response: Any) -> None:
                 raise RuntimeError(f"The AI could not process this file: {item.refusal}")
 
 
-def _chunk_prompt(start_page: int, end_page: int, total_pages: int) -> str:
+def _prompt_with_period_definitions(
+    period_definitions: dict[str, Any] | None,
+) -> str:
+    lines = []
+    for period_number, settings in (period_definitions or {}).items():
+        if not isinstance(settings, dict):
+            continue
+        start = str(settings.get("start_time", "")).strip()
+        end = str(settings.get("end_time", "")).strip()
+        if start and end:
+            lines.append(f"- Period {period_number}: {start}-{end}")
+    if not lines:
+        return EXTRACTION_PROMPT
+    return (
+        f"{EXTRACTION_PROMPT}\n\n"
+        "Configured period fallback:\n"
+        + "\n".join(lines)
+        + "\nUse these times only when the source names that period but omits its time range."
+    )
+
+
+def _chunk_prompt(
+    start_page: int,
+    end_page: int,
+    total_pages: int,
+    *,
+    base_prompt: str = EXTRACTION_PROMPT,
+) -> str:
     page_label = (
         f"original page {start_page}"
         if start_page == end_page
         else f"original pages {start_page}-{end_page}"
     )
     return (
-        f"{EXTRACTION_PROMPT}\n\n"
+        f"{base_prompt}\n\n"
         "PDF coverage contract:\n"
         f"- This file contains {page_label} of a {total_pages}-page source PDF.\n"
         "- Extract every scheduled event visible on every supplied page, including "
@@ -353,6 +380,7 @@ def extract_training_plan_with_ai(
     *,
     api_key: str,
     client: Any | None = None,
+    period_definitions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Extract a training plan with GPT-5.6 Luna Structured Outputs."""
     source_path = Path(path)
@@ -373,6 +401,8 @@ def extract_training_plan_with_ai(
         except ImportError as exc:
             raise RuntimeError("Install the OpenAI Python package from requirements.txt.") from exc
         client = OpenAI(api_key=api_key)
+
+    extraction_prompt = _prompt_with_period_definitions(period_definitions)
 
     if source_path.suffix.lower() == ".pdf":
         try:
@@ -402,7 +432,12 @@ def extract_training_plan_with_ai(
                 parsed, response = _request_extraction(
                     client,
                     chunk_path,
-                    prompt=_chunk_prompt(start_page, end_page, total_pages),
+                    prompt=_chunk_prompt(
+                        start_page,
+                        end_page,
+                        total_pages,
+                        base_prompt=extraction_prompt,
+                    ),
                 )
                 chunks.append((start_page, end_page, parsed, response))
         return _merge_extraction_chunks(
@@ -414,7 +449,7 @@ def extract_training_plan_with_ai(
     parsed, response = _request_extraction(
         client,
         source_path,
-        prompt=EXTRACTION_PROMPT,
+        prompt=extraction_prompt,
     )
     events = pd.DataFrame(
         [event.model_dump() for event in parsed.events],

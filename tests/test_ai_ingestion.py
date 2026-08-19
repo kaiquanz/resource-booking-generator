@@ -20,6 +20,7 @@ from ai_ingestion import (
     validate_reviewed_events,
 )
 from app_services import (
+    apply_configured_period_ranges,
     build_booking_email_content,
     canonical_events_to_functional_data,
     generate_bookings_from_events,
@@ -186,6 +187,45 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(result["events"].loc[0, "conduct"], "STRENGTH TRAINING")
         self.assertEqual(result["coverage_label"], "1/1 PDF pages")
 
+    def test_configured_period_zero_is_added_to_ai_prompt(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "plan.pdf"
+            writer = PdfWriter()
+            writer.add_blank_page(width=792, height=612)
+            with source.open("wb") as stream:
+                writer.write(stream)
+            client = FakeClient()
+            extract_training_plan_with_ai(
+                source,
+                api_key="test-key",
+                client=client,
+                period_definitions={
+                    "0": {"start_time": "07:00", "end_time": "07:50"}
+                },
+            )
+
+        prompt = client.responses.kwargs["input"][0]["content"][1]["text"]
+        self.assertIn("Period 0: 07:00-07:50", prompt)
+        self.assertIn("only when the source names that period", prompt)
+
+    def test_configured_period_zero_fills_a_missing_time_range(self):
+        data = pd.DataFrame(
+            {"TIME": [None, "0800-0850"]},
+            index=["Period 0", "Period 1"],
+        )
+        config = {
+            "timetable": {
+                "periods": {
+                    "0": {"start_time": "07:00", "end_time": "07:50"}
+                }
+            }
+        }
+
+        filled = apply_configured_period_ranges(data, config)
+
+        self.assertEqual(filled.loc["Period 0", "TIME"], "0700-0750")
+        self.assertEqual(filled.loc["Period 1", "TIME"], "0800-0850")
+
     def test_pdf_chunks_reach_and_merge_the_final_month(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "long-plan.pdf"
@@ -289,6 +329,116 @@ class AIIngestionTests(unittest.TestCase):
         automation_baseline.close()
         generated.close()
         self.assertIn("exact", set(result["match_report"]["status"]))
+
+    def test_siao_uses_catalogued_preparation_windows_and_new_vehicle_columns(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([{
+            "date": "2026-10-12", "start_time": "08:00", "end_time": "09:00",
+            "conduct": "Ex Adaptive Warrior ( CO + UO)",
+            "location": "Rugby Field", "remarks": "",
+            "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+        }])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_siao_from_events(config, reviewed, cadet_size=120)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["M13"].value, "12/Oct/2026 08:00")
+        self.assertEqual(sheet["N13"].value, "13/Oct/2026 21:00")
+        self.assertEqual(sheet["R13"].value, "12/Oct/2026 05:30")
+        self.assertEqual(sheet["S13"].value, "13/Oct/2026 22:00")
+        self.assertEqual(sheet["BQ13"].value, "12/Oct/2026 05:30")
+        self.assertEqual(sheet["BR13"].value, "13/Oct/2026 22:00")
+        self.assertEqual(sheet["CG13"].value, "-")
+        self.assertEqual(sheet["CH13"].value, "-")
+        self.assertEqual(sheet["BS13"].value, "-")
+        self.assertEqual(sheet["BT13"].value, "-")
+        self.assertEqual(sheet["BU13"].value, "1")
+        generated.close()
+
+    def test_siao_handles_recce_row_without_catalogue_rule(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([{
+            "date": "2026-10-12", "start_time": "08:00", "end_time": "09:00",
+            "conduct": "Ex Adaptive Warrior ( CO + UO)",
+            "location": "Rugby Field", "remarks": "XAW Recce @ Rambutan Hill",
+            "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+        }])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_siao_from_events(config, reviewed, cadet_size=120)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["C13"].value, "XAW Recce @ Rambutan Hill")
+        self.assertEqual(sheet["C14"].value, "Ex Adaptive Warrior ( CO + UO)")
+        self.assertEqual(sheet["CG13"].value, "-")
+        self.assertEqual(sheet["CH13"].value, "-")
+        generated.close()
+
+    def test_exact_lesson_plan_match_uses_catalogued_bus_setting(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([{
+            "date": "2026-10-07", "start_time": "07:00", "end_time": "07:50",
+            "conduct": "Signal Package", "location": "Stagmont Camp", "remarks": "",
+            "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+        }])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_siao_from_events(config, reviewed, cadet_size=140)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["C13"].value, "Signal Package")
+        self.assertEqual(sheet["CI13"].value, "SAFTI MI")
+        self.assertEqual(sheet["CJ13"].value, "STAGMONT CAMP")
+        self.assertEqual(sheet["CL13"].value, 4)
+        generated.close()
+
+        catalog = yaml.safe_load(
+            (ROOT / "ocs" / "conduct_catalog.yaml").read_text(encoding="utf-8")
+        )
+        signal_rule = next(
+            rule for rule in catalog["conducts"]
+            if rule["conduct_id"] == "signal_package"
+        )
+        signal_rule["bus_required"] = False
+        with tempfile.TemporaryDirectory() as temp_dir:
+            catalog_path = Path(temp_dir) / "conduct_catalog.yaml"
+            catalog_path.write_text(
+                yaml.safe_dump(catalog, sort_keys=False),
+                encoding="utf-8",
+            )
+            config["paths"]["conduct_catalog"] = str(catalog_path)
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = generate_siao_from_events(config, reviewed, cadet_size=140)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        self.assertEqual(generated["(Fill In) SIAO"]["CL13"].value, "-")
+        generated.close()
+
+    def test_transport_window_populates_general_and_military_transport_fields(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([{
+            "date": "2026-10-23", "start_time": "06:15", "end_time": "16:00",
+            "conduct": "M203 L/F", "location": "M203 RANGE", "remarks": "",
+            "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+        }])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_siao_from_events(config, reviewed, cadet_size=140)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["BQ13"].value, "23/Oct/2026 04:45")
+        self.assertEqual(sheet["BR13"].value, "23/Oct/2026 22:30")
+        self.assertEqual(sheet["CG13"].value, "23/Oct/2026 06:15")
+        self.assertEqual(sheet["CH13"].value, "23/Oct/2026 16:00")
+        self.assertEqual(sheet["CI13"].value, "Tango Wing")
+        self.assertEqual(sheet["CJ13"].value, "M203 Range")
+        self.assertEqual(sheet["CL13"].value, 4)
+        generated.close()
 
     def test_ai_events_generate_ocs_and_safti_products(self):
         config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))

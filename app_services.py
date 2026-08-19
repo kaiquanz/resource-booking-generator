@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -26,6 +27,61 @@ _SIAO_DRAFT_LOCK = threading.Lock()
 class PreparedAutomation:
     module: ModuleType
     extractor: Any
+
+
+def configured_period_ranges(config: dict[str, Any]) -> dict[str, str]:
+    """Return validated period labels as legacy HHMM-HHMM timetable ranges."""
+    periods = config.get("timetable", {}).get("periods", {})
+    configured: dict[str, str] = {}
+    for period_number, settings in periods.items():
+        if not isinstance(settings, dict):
+            continue
+        start = str(settings.get("start_time", "")).strip()
+        end = str(settings.get("end_time", "")).strip()
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", start):
+            continue
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", end):
+            continue
+        configured[str(period_number).strip()] = (
+            f"{start.replace(':', '')}-{end.replace(':', '')}"
+        )
+    return configured
+
+
+def apply_configured_period_ranges(
+    data: pd.DataFrame,
+    config: dict[str, Any],
+) -> pd.DataFrame:
+    """Fill named timetable periods whose time range is absent from the TP."""
+    ranges = configured_period_ranges(config)
+    if not ranges or data.empty or data.shape[1] < 1:
+        return data
+
+    filled = data.copy()
+
+    def period_number(value: Any) -> str | None:
+        text = "" if value is None or pd.isna(value) else str(value).strip()
+        match = re.fullmatch(r"(?:period|p)\s*[-_:]?\s*(\d+)", text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        if text.isdigit():
+            return text
+        return None
+
+    time_column = filled.columns[0]
+    for row_label in filled.index:
+        current = filled.at[row_label, time_column]
+        current_period = period_number(current)
+        label_period = period_number(row_label)
+        selected_period = current_period or label_period
+        if selected_period not in ranges:
+            continue
+
+        current_text = "" if pd.isna(current) else str(current).strip()
+        if not current_text or current_period is not None:
+            filled.at[row_label, time_column] = ranges[selected_period]
+
+    return filled
 
 
 def load_automation_module() -> ModuleType:
@@ -91,6 +147,7 @@ def prepare_automation(
     extract_columns = importer.check_date_row(data_transposed)
     data_transposed = data_transposed.drop(data_transposed.index[0])
     functional_data = importer.fill(data_transposed)
+    functional_data = apply_configured_period_ranges(functional_data, config)
 
     extractor = module.Extractor(
         functional_data,

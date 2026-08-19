@@ -219,8 +219,19 @@ def deployment_secret(name: str, default: str = "") -> str:
 def catalogue_to_frame(catalog: dict[str, Any]) -> pd.DataFrame:
     rows = []
     for rule in catalog.get("conducts", []):
+        preparation = rule.get("preparation", {})
+        if not isinstance(preparation, dict):
+            preparation = {}
+
+        def prep_value(item: str, field: str, default: Any = "") -> Any:
+            item_settings = preparation.get(item, {})
+            if not isinstance(item_settings, dict):
+                return default
+            return item_settings.get(field, default)
+
         rows.append({
             "active": bool(rule.get("active", True)),
+            "bus_required": bool(rule.get("bus_required", False)),
             "conduct_id": rule.get("conduct_id", ""),
             "lesson_plan_name": rule.get("lesson_plan_name", ""),
             "display_name": rule.get("display_name", ""),
@@ -229,6 +240,22 @@ def catalogue_to_frame(catalog: dict[str, Any]) -> pd.DataFrame:
             "exclusions": "\n".join(str(value) for value in rule.get("exclusions", [])),
             "multi_day": bool(rule.get("multi_day", False)),
             "exercise_display_name": rule.get("exercise_display_name", ""),
+            "medic_minutes": prep_value("medic", "duration_minutes", 0),
+            "medic_days_before": prep_value("medic", "days_before", None),
+            "medic_time": prep_value("medic", "time", ""),
+            "ammo_collection_minutes": prep_value(
+                "ammo_collection", "duration_minutes", 0
+            ),
+            "ammo_collection_days_before": prep_value(
+                "ammo_collection", "days_before", None
+            ),
+            "ammo_collection_time": prep_value("ammo_collection", "time", ""),
+            "transport_minutes": prep_value("transport", "duration_minutes", 0),
+            "transport_days_before": prep_value("transport", "days_before", None),
+            "transport_time": prep_value("transport", "time", ""),
+            "vehicle_minutes": prep_value("vehicle", "duration_minutes", 0),
+            "vehicle_days_before": prep_value("vehicle", "days_before", None),
+            "vehicle_time": prep_value("vehicle", "time", ""),
         })
     return pd.DataFrame(rows)
 
@@ -237,6 +264,33 @@ def _lines(value: Any) -> list[str]:
     if pd.isna(value):
         return []
     return [line.strip() for line in str(value).splitlines() if line.strip()]
+
+
+def _catalog_integer(value: Any, default: int | None) -> Any:
+    if pd.isna(value) or str(value).strip() == "":
+        return default
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return value
+    return int(numeric) if numeric.is_integer() else numeric
+
+
+def _catalog_text(value: Any) -> str:
+    return "" if pd.isna(value) else str(value).strip()
+
+
+def _catalog_bool(value: Any, default: bool = False) -> bool | Any:
+    if pd.isna(value) or str(value).strip() == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().casefold()
+    if normalized in {"true", "yes", "1"}:
+        return True
+    if normalized in {"false", "no", "0"}:
+        return False
+    return value
 
 
 def frame_to_catalog(frame: pd.DataFrame, original: dict[str, Any]) -> dict[str, Any]:
@@ -250,11 +304,50 @@ def frame_to_catalog(frame: pd.DataFrame, original: dict[str, Any]) -> dict[str,
             "conduct_id": conduct_id,
             "lesson_plan_name": "" if pd.isna(row.get("lesson_plan_name")) else str(row["lesson_plan_name"]).strip(),
             "display_name": "" if pd.isna(row.get("display_name")) else str(row["display_name"]).strip(),
-            "use_display_name": bool(row.get("use_display_name", False)),
+            "use_display_name": _catalog_bool(row.get("use_display_name"), False),
             "aliases": _lines(row.get("aliases")),
             "exclusions": _lines(row.get("exclusions")),
-            "multi_day": bool(row.get("multi_day", False)),
-            "active": bool(row.get("active", True)),
+            "multi_day": _catalog_bool(row.get("multi_day"), False),
+            "active": _catalog_bool(row.get("active"), True),
+            "bus_required": _catalog_bool(row.get("bus_required"), False),
+            "preparation": {
+                "medic": {
+                    "duration_minutes": _catalog_integer(
+                        row.get("medic_minutes"), 0
+                    ),
+                    "days_before": _catalog_integer(
+                        row.get("medic_days_before"), None
+                    ),
+                    "time": _catalog_text(row.get("medic_time")),
+                },
+                "ammo_collection": {
+                    "duration_minutes": _catalog_integer(
+                        row.get("ammo_collection_minutes"), 0
+                    ),
+                    "days_before": _catalog_integer(
+                        row.get("ammo_collection_days_before"), None
+                    ),
+                    "time": _catalog_text(row.get("ammo_collection_time")),
+                },
+                "transport": {
+                    "duration_minutes": _catalog_integer(
+                        row.get("transport_minutes"), 0
+                    ),
+                    "days_before": _catalog_integer(
+                        row.get("transport_days_before"), None
+                    ),
+                    "time": _catalog_text(row.get("transport_time")),
+                },
+                "vehicle": {
+                    "duration_minutes": _catalog_integer(
+                        row.get("vehicle_minutes"), 0
+                    ),
+                    "days_before": _catalog_integer(
+                        row.get("vehicle_days_before"), None
+                    ),
+                    "time": _catalog_text(row.get("vehicle_time")),
+                },
+            },
         }
         exercise_name = row.get("exercise_display_name")
         if not pd.isna(exercise_name) and str(exercise_name).strip():
@@ -383,6 +476,9 @@ if page == "AI TP reader":
             lambda: extract_training_plan_with_ai(
                 ai_source_path,
                 api_key=ai_api_key,
+                period_definitions=(
+                    config.get("timetable", {}).get("periods", {})
+                ),
             ),
             "AI extraction completed. Review every row below.",
         )
@@ -739,7 +835,14 @@ elif page == "Conduct catalogue":
         st.error(str(exc))
         st.stop()
 
-    st.info("Keep conduct IDs stable. To rename an exercise, update its display name and aliases while leaving its ID unchanged.")
+    st.info(
+        "Keep conduct IDs stable. Preparation minutes define each task's duration. "
+        "Optionally set both days-before and a 24-hour time (for example, 2 and 04:45). "
+        "For a conduct that already matches the lesson plan exactly, add a catalogue row "
+        "with that exact Lesson-plan name; its Aliases field may be empty. "
+        "Vehicle timing fills the general vehicle Start/End fields. Enable Bus required "
+        "to calculate 40-seater buses and use the separate Transport timing."
+    )
 
     edited_frame = st.data_editor(
         catalogue_to_frame(catalog),
@@ -748,6 +851,7 @@ elif page == "Conduct catalogue":
         hide_index=True,
         column_config={
             "active": st.column_config.CheckboxColumn("Active"),
+            "bus_required": st.column_config.CheckboxColumn("Bus required"),
             "conduct_id": st.column_config.TextColumn("Stable conduct ID", required=True),
             "lesson_plan_name": st.column_config.TextColumn("Lesson-plan name", required=True),
             "display_name": st.column_config.TextColumn("Display name"),
@@ -756,6 +860,36 @@ elif page == "Conduct catalogue":
             "exclusions": st.column_config.TextColumn("Exclusions · one per line", width="large"),
             "multi_day": st.column_config.CheckboxColumn("Multi-day"),
             "exercise_display_name": st.column_config.TextColumn("Combined display name"),
+            "medic_minutes": st.column_config.NumberColumn(
+                "Medic · minutes", min_value=0, step=1
+            ),
+            "medic_days_before": st.column_config.NumberColumn(
+                "Medic · days before", min_value=0, step=1
+            ),
+            "medic_time": st.column_config.TextColumn("Medic · time HH:MM"),
+            "ammo_collection_minutes": st.column_config.NumberColumn(
+                "Ammo collection · minutes", min_value=0, step=1
+            ),
+            "ammo_collection_days_before": st.column_config.NumberColumn(
+                "Ammo collection · days before", min_value=0, step=1
+            ),
+            "ammo_collection_time": st.column_config.TextColumn(
+                "Ammo collection · time HH:MM"
+            ),
+            "transport_minutes": st.column_config.NumberColumn(
+                "Transport · minutes", min_value=0, step=1
+            ),
+            "transport_days_before": st.column_config.NumberColumn(
+                "Transport · days before", min_value=0, step=1
+            ),
+            "transport_time": st.column_config.TextColumn("Transport · time HH:MM"),
+            "vehicle_minutes": st.column_config.NumberColumn(
+                "Vehicle · minutes", min_value=0, step=1
+            ),
+            "vehicle_days_before": st.column_config.NumberColumn(
+                "Vehicle · days before", min_value=0, step=1
+            ),
+            "vehicle_time": st.column_config.TextColumn("Vehicle · time HH:MM"),
         },
         key="conduct_catalog_editor",
     )
