@@ -118,7 +118,7 @@ class ConductCatalogTests(unittest.TestCase):
             rule for rule in self.catalog["conducts"]
             if rule["conduct_id"] == "xaw_co_uo"
         )
-        self.assertEqual(xaw_rule["max_days"], 2)
+        self.assertEqual(xaw_rule["duration_days"], 2)
 
     def test_xaw_multi_day_range_is_limited_to_two_days(self):
         extractor = self.module.Extractor.__new__(self.module.Extractor)
@@ -136,6 +136,14 @@ class ConductCatalogTests(unittest.TestCase):
         ranges = extractor.conduct_exercises(conduct_mapping)
 
         self.assertEqual(ranges[target], ["12-Oct-26", "13-Oct-26"])
+
+        single_date_range = extractor.conduct_exercises({
+            "12-Oct-26": [target, target],
+        })
+        self.assertEqual(
+            single_date_range[target],
+            ["12-Oct-26", "13-Oct-26"],
+        )
 
     def test_optional_preparation_backtrack_builds_requested_window(self):
         rule = {

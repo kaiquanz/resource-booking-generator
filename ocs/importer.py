@@ -119,14 +119,14 @@ def validate_conduct_catalog(catalog, lesson_plan_names=None):
                 f"{conduct_id or f'row {row_number}'} bus_required must be true or false."
             )
 
-        max_days = conduct.get("max_days")
-        if max_days is not None and (
-            isinstance(max_days, bool)
-            or not isinstance(max_days, int)
-            or max_days < 1
+        duration_days = conduct.get("duration_days")
+        if duration_days is not None and (
+            isinstance(duration_days, bool)
+            or not isinstance(duration_days, int)
+            or duration_days < 1
         ):
             errors.append(
-                f"{conduct_id or f'row {row_number}'} max_days must be a positive whole number."
+                f"{conduct_id or f'row {row_number}'} duration_days must be a positive whole number."
             )
 
         for alias in conduct.get("aliases", []):
@@ -1746,10 +1746,16 @@ class Extractor:
         for k, v in exercise.items():
             dates = [d.strip() for d in v.split(",")]
             rule = self.catalog_rule_for_target(k)
-            max_days = rule.get("max_days") if rule else None
-            if max_days:
-                dates = dates[:max_days]
-            exercise[k] = [dates[0], dates[-1]]
+            duration_days = rule.get("duration_days") if rule else None
+            if duration_days:
+                start_date = datetime.strptime(dates[0], "%d-%b-%y")
+                end_date = start_date + timedelta(days=duration_days - 1)
+                exercise[k] = [
+                    dates[0],
+                    end_date.strftime("%d-%b-%y"),
+                ]
+            else:
+                exercise[k] = [dates[0], dates[-1]]
         return exercise
 
     def remarks_information(self):

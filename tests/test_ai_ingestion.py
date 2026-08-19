@@ -373,6 +373,8 @@ class AIIngestionTests(unittest.TestCase):
         sheet = generated["(Fill In) SIAO"]
         self.assertEqual(sheet["C13"].value, "XAW Recce @ Rambutan Hill")
         self.assertEqual(sheet["C14"].value, "Ex Adaptive Warrior ( CO + UO)")
+        self.assertEqual(sheet["E14"].value, "12-Oct-26")
+        self.assertEqual(sheet["G14"].value, "13-Oct-26")
         self.assertEqual(sheet["CG13"].value, "-")
         self.assertEqual(sheet["CH13"].value, "-")
         generated.close()

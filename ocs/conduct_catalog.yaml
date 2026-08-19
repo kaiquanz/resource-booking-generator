@@ -183,7 +183,7 @@ conducts:
   - Fireside
   - JVLF
   multi_day: true
-  max_days: 2
+  duration_days: 2
   active: true
   bus_required: false
   exercise_display_name: Ex Adaptive Warrior ( CO + UO)
