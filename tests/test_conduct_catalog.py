@@ -114,6 +114,29 @@ class ConductCatalogTests(unittest.TestCase):
         self.assertTrue(bus_rules["signal_package"])
         self.assertFalse(bus_rules["xaw_co_uo"])
 
+        xaw_rule = next(
+            rule for rule in self.catalog["conducts"]
+            if rule["conduct_id"] == "xaw_co_uo"
+        )
+        self.assertEqual(xaw_rule["max_days"], 2)
+
+    def test_xaw_multi_day_range_is_limited_to_two_days(self):
+        extractor = self.module.Extractor.__new__(self.module.Extractor)
+        extractor.conduct_catalog = self.catalog
+        target = "Ex Adaptive Warrior ( CO + UO)"
+        dates = [
+            "12-Oct-26",
+            "13-Oct-26",
+            "14-Oct-26",
+            "15-Oct-26",
+            "16-Oct-26",
+        ]
+        conduct_mapping = {date: [target, target] for date in dates}
+
+        ranges = extractor.conduct_exercises(conduct_mapping)
+
+        self.assertEqual(ranges[target], ["12-Oct-26", "13-Oct-26"])
+
     def test_optional_preparation_backtrack_builds_requested_window(self):
         rule = {
             "preparation": {

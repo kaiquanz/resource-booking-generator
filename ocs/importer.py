@@ -119,6 +119,16 @@ def validate_conduct_catalog(catalog, lesson_plan_names=None):
                 f"{conduct_id or f'row {row_number}'} bus_required must be true or false."
             )
 
+        max_days = conduct.get("max_days")
+        if max_days is not None and (
+            isinstance(max_days, bool)
+            or not isinstance(max_days, int)
+            or max_days < 1
+        ):
+            errors.append(
+                f"{conduct_id or f'row {row_number}'} max_days must be a positive whole number."
+            )
+
         for alias in conduct.get("aliases", []):
             normalized_alias = normalize_conduct_name(alias)
             if not normalized_alias:
@@ -1735,6 +1745,10 @@ class Extractor:
 
         for k, v in exercise.items():
             dates = [d.strip() for d in v.split(",")]
+            rule = self.catalog_rule_for_target(k)
+            max_days = rule.get("max_days") if rule else None
+            if max_days:
+                dates = dates[:max_days]
             exercise[k] = [dates[0], dates[-1]]
         return exercise
 
