@@ -14,6 +14,14 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import yaml
+
+# streamlit-cookies-manager 0.2.0 still decorates its key derivation helper
+# with the legacy st.cache API, which was removed in newer Streamlit releases.
+# Its cached return value is immutable bytes, so st.cache_data is the correct
+# modern equivalent.
+if not hasattr(st, "cache"):
+    st.cache = st.cache_data
+
 from streamlit_cookies_manager import EncryptedCookieManager
 
 from ai_ingestion import (
