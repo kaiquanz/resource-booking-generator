@@ -68,9 +68,8 @@ def apply_configured_period_ranges(
             return text
         return None
 
-    time_column = filled.columns[0]
-    for row_label in filled.index:
-        current = filled.at[row_label, time_column]
+    for row_position, row_label in enumerate(filled.index):
+        current = filled.iat[row_position, 0]
         current_period = period_number(current)
         label_period = period_number(row_label)
         selected_period = current_period or label_period
@@ -79,7 +78,7 @@ def apply_configured_period_ranges(
 
         current_text = "" if pd.isna(current) else str(current).strip()
         if not current_text or current_period is not None:
-            filled.at[row_label, time_column] = ranges[selected_period]
+            filled.iat[row_position, 0] = ranges[selected_period]
 
     return filled
 

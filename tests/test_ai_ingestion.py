@@ -226,6 +226,25 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(filled.loc["Period 0", "TIME"], "0700-0750")
         self.assertEqual(filled.loc["Period 1", "TIME"], "0800-0850")
 
+    def test_configured_period_zero_handles_duplicate_timetable_rows(self):
+        data = pd.DataFrame(
+            {"TIME": [None, None, "0800-0850"]},
+            index=["Period 0", "Period 0", "Period 1"],
+        )
+        config = {
+            "timetable": {
+                "periods": {
+                    "0": {"start_time": "07:00", "end_time": "07:50"}
+                }
+            }
+        }
+
+        filled = apply_configured_period_ranges(data, config)
+
+        self.assertEqual(filled.iloc[0, 0], "0700-0750")
+        self.assertEqual(filled.iloc[1, 0], "0700-0750")
+        self.assertEqual(filled.iloc[2, 0], "0800-0850")
+
     def test_pdf_chunks_reach_and_merge_the_final_month(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "long-plan.pdf"
