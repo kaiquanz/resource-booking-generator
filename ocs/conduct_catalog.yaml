@@ -158,9 +158,9 @@ conducts:
   bus_required: true
   preparation:
     medic: {duration_minutes: 0, days_before: null, time: ''}
-    ammo_collection: {duration_minutes: 810, days_before: 0, time: '0630'}
-    transport: {duration_minutes: 690, days_before: 0, time: '0700'}
-    vehicle: {duration_minutes: 420, days_before: 0, time: '0600'}
+    ammo_collection: {duration_minutes: 810, days_before: 0, time: '06:30'}
+    transport: {duration_minutes: 690, days_before: 0, time: '07:00'}
+    vehicle: {duration_minutes: 420, days_before: 0, time: '06:00'}
 - conduct_id: xaw_co_uo
   lesson_plan_name: Ex Adaptive Warrior ( CO + UO)
   display_name: Ex Adaptive Warrior ( CO + UO)
@@ -452,9 +452,9 @@ conducts:
   preparation:
     
     medic: {duration_minutes: 0, days_before: null, time: ''}
-    ammo_collection: {duration_minutes: 780, days_before: 0, time: '0700'}
-    transport: {duration_minutes: 690, days_before: 0, time: '0700'}
-    vehicle: {duration_minutes: 840, days_before: 0, time: '0600'}
+    ammo_collection: {duration_minutes: 780, days_before: 0, time: '07:00'}
+    transport: {duration_minutes: 690, days_before: 0, time: '07:00'}
+    vehicle: {duration_minutes: 840, days_before: 0, time: '06:00'}
 - conduct_id: lmg_qualification_shoot
   lesson_plan_name: LMG QUALIFICATION SHOOT
   display_name: LMG Qualification Shoot
