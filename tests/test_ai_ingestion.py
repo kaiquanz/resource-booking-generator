@@ -394,6 +394,7 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(sheet["C14"].value, "Ex Adaptive Warrior ( CO + UO)")
         self.assertEqual(sheet["E14"].value, "12-Oct-26")
         self.assertEqual(sheet["G14"].value, "13-Oct-26")
+        self.assertEqual(sheet["CC13"].value, "-")
         self.assertEqual(sheet["CG13"].value, "-")
         self.assertEqual(sheet["CH13"].value, "-")
         generated.close()
@@ -412,6 +413,9 @@ class AIIngestionTests(unittest.TestCase):
         generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
         sheet = generated["(Fill In) SIAO"]
         self.assertEqual(sheet["C13"].value, "Signal Package")
+        self.assertEqual(sheet["C3"].value, 140)
+        self.assertEqual(sheet["CG13"].value, "07/Oct/2026 07:00")
+        self.assertEqual(sheet["CH13"].value, "07/Oct/2026 07:50")
         self.assertEqual(sheet["CI13"].value, "SAFTI MI")
         self.assertEqual(sheet["CJ13"].value, "STAGMONT CAMP")
         self.assertEqual(sheet["CL13"].value, 4)
@@ -456,9 +460,44 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(sheet["BR13"].value, "23/Oct/2026 22:30")
         self.assertEqual(sheet["CG13"].value, "23/Oct/2026 06:15")
         self.assertEqual(sheet["CH13"].value, "23/Oct/2026 16:00")
-        self.assertEqual(sheet["CI13"].value, "Tango Wing")
+        self.assertEqual(
+            str(sheet["CI13"].value).strip(),
+            "SAFTI MI (BLK 27, TWG)",
+        )
         self.assertEqual(sheet["CJ13"].value, "M203 Range")
         self.assertEqual(sheet["CL13"].value, 4)
+        self.assertEqual(str(sheet["BW13"].value), "1")
+        self.assertEqual(sheet["CC13"].value, "5T PARKOVER ON 221026")
+        generated.close()
+
+    def test_one_way_ne_tour_and_two_way_cougar_bus_transport(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([
+            {
+                "date": "2026-10-08", "start_time": "08:30", "end_time": "12:30",
+                "conduct": "NE TOUR", "location": "KRANJI WAR MEMORIAL", "remarks": "",
+                "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+            },
+            {
+                "date": "2026-10-09", "start_time": "08:30", "end_time": "12:30",
+                "conduct": "Ex. COUGAR", "location": "MMRC", "remarks": "",
+                "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+            },
+        ])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_siao_from_events(config, reviewed, cadet_size=140)
+
+        generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
+        sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["C13"].value, "NE TOUR")
+        self.assertEqual(sheet["CG13"].value, "08/Oct/2026 08:30")
+        self.assertEqual(sheet["CH13"].value, "-")
+        self.assertEqual(sheet["C14"].value, "Ex. COUGAR")
+        self.assertEqual(sheet["CG14"].value, "09/Oct/2026 07:00")
+        self.assertEqual(sheet["CH14"].value, "09/Oct/2026 18:30")
+        self.assertEqual(sheet["CJ14"].value, "MMRC")
+        self.assertEqual(sheet["CL14"].value, 4)
         generated.close()
 
     def test_ai_events_generate_ocs_and_safti_products(self):

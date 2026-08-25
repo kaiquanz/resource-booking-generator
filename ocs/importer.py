@@ -685,6 +685,16 @@ SIAO_MANUAL_INPUT_FILL = PatternFill(
 
 SIAO_DATETIME_FORMAT = "%d/%b/%Y %H:%M"
 
+SIAO_TWO_WAY_BUS_CONDUCT_IDS = frozenset({
+    "m203_live_firing",
+    "gpmg_live_firing",
+    "ptco_jvlf",
+    "signal_package",
+    "lmg_qualification_shoot",
+    "ex_cougar",
+})
+SIAO_ONE_WAY_BUS_CONDUCT_IDS = frozenset({"ne_tour"})
+
 
 def _normalized_siao_header(value):
     return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
@@ -717,6 +727,16 @@ def resolve_siao_output_columns(ws):
                 resolved["general_transport_end"] = column
             elif header in {"40 - seater", "40-seater"}:
                 resolved["forty_seater"] = column
+            elif (
+                column > column_index_from_string("AZ")
+                and header in {"5-ton", "5 ton"}
+            ):
+                resolved["five_ton"] = column
+            elif (
+                column > column_index_from_string("AZ")
+                and header == "parkover"
+            ):
+                resolved["parkover"] = column
 
     if military_transport_column is not None:
         for column in range(
@@ -754,15 +774,44 @@ def resolve_siao_output_columns(ws):
     return resolved
 
 
-def _timetable_start_time(value):
-    """Return the first 24-hour time from a timetable range as HH:MM."""
-    match = re.search(
+def _timetable_time_range(value):
+    """Return the first two 24-hour times from a timetable value."""
+    matches = list(re.finditer(
         r"(?<!\d)([01]?\d|2[0-3]):?([0-5]\d)(?!\d)",
         str(value or ""),
-    )
-    if not match:
+    ))
+    times = [
+        f"{int(match.group(1)):02d}:{match.group(2)}"
+        for match in matches[:2]
+    ]
+    if not times:
+        return None, None
+    if len(times) == 1:
+        return times[0], None
+    return times[0], times[1]
+
+
+def _timetable_start_time(value):
+    """Return the first 24-hour time from a timetable range as HH:MM."""
+    return _timetable_time_range(value)[0]
+
+
+def _siao_datetime(date_value, time_value):
+    """Combine a SIAO date label and timetable time, if both are available."""
+    if not date_value or not time_value:
         return None
-    return f"{int(match.group(1)):02d}:{match.group(2)}"
+    return datetime.combine(
+        datetime.strptime(str(date_value), "%d-%b-%y").date(),
+        datetime.strptime(str(time_value), "%H:%M").time(),
+    )
+
+
+def _previous_working_day(value):
+    """Return the preceding Monday-Friday date."""
+    previous_day = value - timedelta(days=1)
+    while previous_day.weekday() >= 5:
+        previous_day -= timedelta(days=1)
+    return previous_day
 
 
 def _has_siao_allocation(value):
@@ -791,7 +840,13 @@ def highlight_siao_manual_inputs(ws, row):
         for column in columns:
             ws[f"{column}{row}"].fill = SIAO_MANUAL_INPUT_FILL
 
-    fill(("F", "H", "I", "J", "M", "N", "O", "BV", "BW"))
+    fill((
+        "F", "H", "I", "J", "M", "N", "O", "BU", "BV", "BW",
+        "BZ", "CA", "CB", "CC",
+    ))
+
+    for column in ("CK", "CM"):
+        ws[f"{column}{row}"].fill = PatternFill()
 
     ammo_base_exists = _has_siao_allocation(ws[f"T{row}"].value)
     conventional_arms_exist = any(
@@ -802,7 +857,7 @@ def highlight_siao_manual_inputs(ws, row):
         )
     )
     if ammo_base_exists or conventional_arms_exist:
-        fill(("R", "S"))
+        fill(("R", "S", "T"))
 
     military_transport_exists = any(
         _has_siao_allocation(ws.cell(row, column).value)
@@ -812,7 +867,7 @@ def highlight_siao_manual_inputs(ws, row):
         )
     )
     if military_transport_exists:
-        fill(("CJ", "CK", "CL", "CM"))
+        fill(("CG", "CH", "CI", "CJ", "CL", "CN"))
 
     if _has_siao_allocation(ws[f"CX{row}"].value):
         fill(("CU", "CV", "CW"))
@@ -1399,6 +1454,7 @@ class Extractor:
 
         wb = openpyxl.load_workbook(template_path)
         ws = wb["(Fill In) SIAO"]
+        ws["C3"] = int(cadet_size)
         output_columns = resolve_siao_output_columns(ws)
         vehicle_columns = resolve_siao_vehicle_columns(self.lesson_plan)
 
@@ -1437,12 +1493,17 @@ class Extractor:
                     start_date = c
                     end_date = c
 
+                normalized_target = normalize_conduct_name(match_name)
                 rule = self.catalog_rule_for_target(match_name)
+                conduct_id = str((rule or {}).get("conduct_id", "")).strip()
+                activity_start_time = self.conduct_start_times.get(
+                    (start_date, normalized_target)
+                )
+                activity_end_time = self.conduct_end_times.get(
+                    (start_date, normalized_target)
+                )
                 preparation_schedule = {}
                 if rule:
-                    activity_start_time = self.conduct_start_times.get(
-                        (start_date, normalize_conduct_name(match_name))
-                    )
                     try:
                         activity_date = datetime.strptime(
                             start_date,
@@ -1543,23 +1604,28 @@ class Extractor:
                         value=source_value,
                     )
 
+                if (
+                    conduct_id == "ex_cougar"
+                    and "transport_venue_to" in output_columns
+                ):
+                    ws.cell(
+                        row=start_row,
+                        column=output_columns["transport_venue_to"],
+                        value="MMRC",
+                    )
+
                 preparation_cells = {
                     "medic": [("medic_start", "medic_end")],
                     "ammo_collection": [(
                         "ammo_collection_start",
                         "ammo_collection_end",
                     )],
-                    "transport": [("transport_start", "transport_end")],
                     "vehicle": [(
                         "general_transport_start",
                         "general_transport_end",
                     )],
                 }
                 for item_name, column_pairs in preparation_cells.items():
-                    if item_name == "transport" and not (
-                        rule and rule.get("bus_required", False)
-                    ):
-                        continue
                     schedule_item = preparation_schedule.get(item_name, {})
                     for start_key, end_key in column_pairs:
                         if (
@@ -1583,6 +1649,75 @@ class Extractor:
                                     SIAO_DATETIME_FORMAT
                                 ),
                             )
+
+                bus_required = bool(rule and rule.get("bus_required", False))
+                two_way_bus = conduct_id in SIAO_TWO_WAY_BUS_CONDUCT_IDS
+                one_way_bus = conduct_id in SIAO_ONE_WAY_BUS_CONDUCT_IDS
+                if bus_required and (two_way_bus or one_way_bus):
+                    schedule_item = preparation_schedule.get("transport", {})
+                    use_catalog_window = (
+                        schedule_item.get("duration_minutes", 0) > 0
+                        and schedule_item.get("start") is not None
+                        and schedule_item.get("end") is not None
+                    )
+                    transport_start = (
+                        schedule_item.get("start")
+                        if use_catalog_window
+                        else _siao_datetime(start_date, activity_start_time)
+                    )
+                    transport_end = (
+                        schedule_item.get("end")
+                        if use_catalog_window
+                        else _siao_datetime(end_date, activity_end_time)
+                    )
+                    if (
+                        transport_start is not None
+                        and "transport_start" in output_columns
+                    ):
+                        ws.cell(
+                            row=start_row,
+                            column=output_columns["transport_start"],
+                            value=transport_start.strftime(SIAO_DATETIME_FORMAT),
+                        )
+                    if (
+                        two_way_bus
+                        and transport_end is not None
+                        and "transport_end" in output_columns
+                    ):
+                        ws.cell(
+                            row=start_row,
+                            column=output_columns["transport_end"],
+                            value=transport_end.strftime(SIAO_DATETIME_FORMAT),
+                        )
+
+                five_ton_column = output_columns.get("five_ton")
+                parkover_column = output_columns.get("parkover")
+                is_xaw_recce = normalized_target == normalize_conduct_name(
+                    "XAW RECCE"
+                )
+                if is_xaw_recce and parkover_column is not None:
+                    ws.cell(
+                        row=start_row,
+                        column=parkover_column,
+                        value="-",
+                    )
+                elif (
+                    five_ton_column is not None
+                    and parkover_column is not None
+                    and _has_siao_allocation(
+                        ws.cell(row=start_row, column=five_ton_column).value
+                    )
+                ):
+                    conduct_day = datetime.strptime(
+                        start_date,
+                        "%d-%b-%y",
+                    ).date()
+                    parkover_day = _previous_working_day(conduct_day)
+                    ws.cell(
+                        row=start_row,
+                        column=parkover_column,
+                        value=f"5T PARKOVER ON {parkover_day.strftime('%d%m%y')}",
+                    )
 
                 if rule and "forty_seater" in output_columns:
                     bus_count = (
@@ -1611,6 +1746,7 @@ class Extractor:
         cl = {}
         self.match_report = []
         self.conduct_start_times = {}
+        self.conduct_end_times = {}
         timetable_times = self.data.iloc[:, 0]
 
         for i, column in enumerate(conduct_list.columns):
@@ -1632,10 +1768,10 @@ class Extractor:
                         timetable_value = timetable_value.iloc[0]
                 except (KeyError, IndexError):
                     timetable_value = None
-                start_time = _timetable_start_time(timetable_value)
+                start_time, end_time = _timetable_time_range(timetable_value)
 
                 conducts.extend(
-                    (c.strip(), start_time)
+                    (c.strip(), start_time, end_time)
                     for c in str(conduct).split(";")
                     if c.strip()
                 )
@@ -1643,7 +1779,7 @@ class Extractor:
             cl[date] = conducts
 
         for date, conducts in cl.items():
-            for conduct, start_time in conducts:
+            for conduct, start_time, end_time in conducts:
                 if conduct == "LOC":
                     break
 
@@ -1683,6 +1819,14 @@ class Extractor:
                                 normalize_conduct_name(resolution["target"]),
                             ),
                             start_time,
+                        )
+                    if end_time:
+                        self.conduct_end_times.setdefault(
+                            (
+                                date,
+                                normalize_conduct_name(resolution["target"]),
+                            ),
+                            end_time,
                         )
                     date_conduct_mapping.setdefault(date, []).extend(
                         [resolution["target"], display_name]

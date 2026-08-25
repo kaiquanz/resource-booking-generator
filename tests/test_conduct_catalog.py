@@ -1,6 +1,6 @@
 import copy
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -84,8 +84,8 @@ class ConductCatalogTests(unittest.TestCase):
                 "vehicle": (1305, 0, "04:45"),
             },
             "ippt": {
-                "medic": (240, 0, "05:30"),
-                "vehicle": (240, 0, "05:30"),
+                "medic": (240, 0, "05:45"),
+                "vehicle": (240, 0, "05:45"),
             },
             "interval_fast_march": {
                 "medic": (210, 0, "06:00"),
@@ -143,6 +143,12 @@ class ConductCatalogTests(unittest.TestCase):
         self.assertEqual(
             single_date_range[target],
             ["12-Oct-26", "13-Oct-26"],
+        )
+
+    def test_parkover_uses_previous_working_day(self):
+        self.assertEqual(
+            self.module._previous_working_day(date(2026, 10, 26)),
+            date(2026, 10, 23),
         )
 
     def test_optional_preparation_backtrack_builds_requested_window(self):
@@ -466,11 +472,17 @@ class ConductCatalogTests(unittest.TestCase):
         sheet = workbook.active
 
         self.module.highlight_siao_manual_inputs(sheet, 13)
-        always_highlighted = ("F", "H", "I", "J", "M", "N", "O", "BV", "BW")
+        always_highlighted = (
+            "F", "H", "I", "J", "M", "N", "O", "BU", "BV", "BW",
+            "BZ", "CA", "CB", "CC",
+        )
         for column in always_highlighted:
             self.assertEqual(sheet[f"{column}13"].fill.fgColor.rgb, "FFFFF2CC")
 
-        for column in ("R", "S", "CJ", "CK", "CL", "CM", "CU", "CV", "CW"):
+        for column in (
+            "R", "S", "T", "CG", "CH", "CI", "CJ", "CK", "CL", "CM",
+            "CN", "CU", "CV", "CW",
+        ):
             self.assertIsNone(sheet[f"{column}13"].fill.fill_type)
 
         sheet["W14"] = 120
@@ -478,13 +490,19 @@ class ConductCatalogTests(unittest.TestCase):
         sheet["CX14"] = "2 x 45-seater buses"
         self.module.highlight_siao_manual_inputs(sheet, 14)
 
-        for column in ("R", "S", "CJ", "CK", "CL", "CM", "CU", "CV", "CW"):
+        for column in (
+            "R", "S", "T", "CG", "CH", "CI", "CJ", "CL", "CN",
+            "CU", "CV", "CW",
+        ):
             self.assertEqual(sheet[f"{column}14"].fill.fgColor.rgb, "FFFFF2CC")
+        for column in ("CK", "CM"):
+            self.assertIsNone(sheet[f"{column}14"].fill.fill_type)
 
         sheet["T15"] = "SAFTI Ammo Point"
         self.module.highlight_siao_manual_inputs(sheet, 15)
         self.assertEqual(sheet["R15"].fill.fgColor.rgb, "FFFFF2CC")
         self.assertEqual(sheet["S15"].fill.fgColor.rgb, "FFFFF2CC")
+        self.assertEqual(sheet["T15"].fill.fgColor.rgb, "FFFFF2CC")
 
         workbook.close()
 
