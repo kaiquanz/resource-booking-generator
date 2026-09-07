@@ -8,7 +8,8 @@ TP extraction and SIAO-generation behaviour is preserved.
 1. Create and activate a Python virtual environment.
 2. Install `requirements.txt`.
 3. Set `TP_COOKIE_PASSWORD` to a long random value.
-4. Set `OPENAI_API_KEY` if you want to use the AI training-plan reader.
+4. Either enter your own OpenAI API key on **AI TP reader**, or set
+   `OPENAI_API_KEY` as an optional server fallback.
 5. Start the app with `streamlit run app.py`.
 
 The Settings page begins with the values in `ocs/config.yaml`. When a user saves
@@ -32,6 +33,24 @@ review step: visually complex, low-quality, or ambiguous plans may need manual
 correction. Uploaded files are sent to OpenAI when the user selects the extract
 button, so deployment owners must confirm that this is allowed by their
 information-handling policy.
+
+### Use your own OpenAI key
+
+The **AI TP reader** includes a password-style **Your OpenAI API key** field.
+The entered key takes priority over a deployment key and lasts only for the
+active Streamlit session. It is never copied into `config.yaml`, browser
+cookies, generated downloads, or application logs.
+
+1. Open the official [OpenAI API key page](https://platform.openai.com/api-keys).
+2. Create a new secret key and copy it when it is shown.
+3. Paste it into **Your OpenAI API key** in the app.
+4. Upload the training plan and select **Extract editable schedule with AI**.
+5. Select **Forget key** when the session is finished, especially on a shared
+   computer.
+
+See OpenAI's official guides for
+[finding an API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-api-key)
+and [keeping API keys safe](https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety).
 
 For spreadsheets that depend on drawings, embedded pictures, or charts, export
 the workbook to PDF first. PDF input includes page images, while spreadsheet
@@ -74,10 +93,12 @@ Use a Streamlit-compatible host such as Streamlit Community Cloud, Render,
 Railway, Fly.io, or a container host. Vercel's normal serverless functions are
 not a good fit for this app.
 
-Set `TP_COOKIE_PASSWORD` and `OPENAI_API_KEY` as host secrets. Keep the cookie
-password stable across deploys. AI extraction is locked to `gpt-5.6-luna`;
-there is no model override. Never place the API key in `ocs/config.yaml`,
-browser cookies, or a downloadable local configuration file.
+Set `TP_COOKIE_PASSWORD` as a host secret and keep it stable across deploys.
+`OPENAI_API_KEY` is optional: set it only if the deployment should provide a
+shared fallback when a user has not entered a personal session key. AI
+extraction is locked to `gpt-5.6-luna`; there is no model override. Never place
+an API key in `ocs/config.yaml`, browser cookies, or a downloadable local
+configuration file.
 `ocs/config.yaml` is loaded relative to `app.py`. File paths inside it may be
 absolute for local use or relative to the repository root for hosted use.
 Repository-relative paths work unchanged on Streamlit Community Cloud.
@@ -98,11 +119,37 @@ it broadly; otherwise visitors can consume the deployment owner's API quota.
 1. Select **Fork** on GitHub to create a copy of this repository under your own account.
 2. In Streamlit Community Cloud, create an app from your forked repository.
 3. Select `app.py` as the entrypoint.
-4. In the app's Secrets settings, add a long, stable `TP_COOKIE_PASSWORD` and an
-   `OPENAI_API_KEY`. The application always uses `gpt-5.6-luna`.
+4. In the app's Secrets settings, add a long, stable `TP_COOKIE_PASSWORD`.
+   Optionally add `OPENAI_API_KEY` as a shared fallback; otherwise users enter
+   their own key on **AI TP reader**. The application always uses
+   `gpt-5.6-luna`.
 5. Deploy the app. Use **AI TP reader** for flexible PDFs, images, and
    spreadsheets, or open **Settings** to upload a TP for the original reader.
 
 The repository includes the default lesson plan, SIAO template, and conduct
 catalogue because the app offers them as downloads. It intentionally does not
 include an operational TP; each user supplies that file through the uploader.
+
+## Code layout
+
+`app.py` is intentionally only the Streamlit entry point. Responsibilities are
+split into focused classes and modules:
+
+- `tp_app/application.py` — application shell and page routing.
+- `tp_app/context.py` — browser configuration, session state, and uploaded files.
+- `tp_app/openai_access.py` — session-only personal API-key selection.
+- `tp_app/ingestion/extractor.py` — `TrainingPlanExtractor` and OpenAI requests.
+- `tp_app/ingestion/sources.py` — supported file preparation and PDF chunk prompts.
+- `tp_app/ingestion/review.py` — `ReviewedEventValidator` for editable AI rows.
+- `tp_app/catalogue_mapper.py` — YAML-to-table catalogue conversion.
+- `tp_app/pages/` — one page class per Streamlit workspace.
+- `ocs/training_plan_importer.py` — `TrainingPlanImporter` public class.
+- `ocs/siao_extractor.py` — `SIAOExtractor` public class.
+- `ocs/conduct_catalogue.py` and `ocs/booking_service.py` — focused service classes.
+- `ocs/importer.py` and `ai_ingestion.py` — small compatibility entry points for
+  existing scripts and tests.
+
+`ocs/legacy_importer.py` preserves the proven workbook implementation beneath
+the new class boundaries. This keeps the many fixed template-cell rules stable
+while new work can target the focused modules instead of adding more code to a
+single entry-point file.

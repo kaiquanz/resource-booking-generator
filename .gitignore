@@ -5,6 +5,8 @@ __pycache__/
 143/
 
 # Generated and verification artifacts
+.artifact-work*/
+.codex-temp/
 outputs/
 _verification/
 regions/

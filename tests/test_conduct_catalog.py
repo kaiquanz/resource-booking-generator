@@ -1,7 +1,9 @@
 import copy
+import sys
 import unittest
 from datetime import date, datetime
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch
 
 import openpyxl
@@ -36,6 +38,20 @@ class ConductCatalogTests(unittest.TestCase):
         conduct_ids = [rule["conduct_id"] for rule in self.catalog["conducts"]]
         self.assertEqual(len(conduct_ids), len(set(conduct_ids)))
 
+    def test_loader_does_not_reuse_legacy_streamlit_importer_cache(self):
+        stale_module = ModuleType("tp_importer")
+        previous = sys.modules.get("tp_importer")
+        sys.modules["tp_importer"] = stale_module
+        try:
+            loaded = load_automation_module()
+            self.assertIsNot(loaded, stale_module)
+            self.assertTrue(loaded.__name__.startswith("tp_importer_"))
+        finally:
+            if previous is None:
+                sys.modules.pop("tp_importer", None)
+            else:
+                sys.modules["tp_importer"] = previous
+
     def test_every_conduct_has_preparation_fields(self):
         for rule in self.catalog["conducts"]:
             self.assertTrue(
@@ -44,6 +60,8 @@ class ConductCatalogTests(unittest.TestCase):
                 )
             )
             self.assertIsInstance(rule["bus_required"], bool)
+            self.assertIsInstance(rule["active"], bool)
+            self.assertIn(rule["timing"], ("in_camp", "external", None))
             for item_name in (
                 "medic",
                 "ammo_collection",
@@ -52,57 +70,63 @@ class ConductCatalogTests(unittest.TestCase):
             ):
                 item = rule["preparation"][item_name]
                 self.assertIn("duration_minutes", item)
-                self.assertIn("days_before", item)
-                self.assertIn("time", item)
+                self.assertNotIn("days_before", item)
+                self.assertNotIn("time", item)
 
     def test_screenshot_preparation_windows_are_recorded(self):
         rules = {
             rule["conduct_id"]: rule for rule in self.catalog["conducts"]
         }
 
-        expected = {
+        expected_durations = {
             "xaw_co_uo": {
-                "medic": (2220, 0, "08:00"),
-                "ammo_collection": (2430, 0, "05:30"),
-                "vehicle": (2430, 0, "05:30"),
+                "medic": 2220,
+                "ammo_collection": 2430,
+                "vehicle": 2430,
             },
             "xaw_compass_pf": {
-                "medic": (1019, 0, "07:00"),
-                "ammo_collection": (1020, 0, "05:30"),
-                "vehicle": (1109, 0, "05:30"),
+                "medic": 1019,
+                "ammo_collection": 1020,
+                "vehicle": 1109,
             },
             "m203_live_firing": {
-                "medic": (1065, 0, "04:45"),
-                "ammo_collection": (690, 0, "05:30"),
-                "transport": (585, 0, "06:15"),
-                "vehicle": (1065, 0, "04:45"),
+                "medic": 1065,
+                "ammo_collection": 690,
+                "transport": 585,
+                "vehicle": 1065,
             },
             "gpmg_live_firing": {
-                "medic": (1305, 0, "04:45"),
-                "ammo_collection": (1140, 0, "05:30"),
-                "transport": (1125, 0, "06:15"),
-                "vehicle": (1305, 0, "04:45"),
+                "medic": 1305,
+                "ammo_collection": 1140,
+                "transport": 1125,
+                "vehicle": 1305,
             },
             "ippt": {
-                "medic": (240, 0, "05:45"),
-                "vehicle": (240, 0, "05:45"),
+                "medic": 240,
+                "vehicle": 240,
             },
             "interval_fast_march": {
-                "medic": (210, 0, "06:00"),
-                "vehicle": (210, 0, "06:00"),
+                "medic": 210,
+                "vehicle": 210,
             },
             "lmg_qualification_shoot": {
-                "transport": (600, 0, "07:00")
+                "transport": 600
             },
         }
 
-        for conduct_id, preparation in expected.items():
-            for item_name, values in preparation.items():
+        for conduct_id, preparation in expected_durations.items():
+            for item_name, duration in preparation.items():
                 item = rules[conduct_id]["preparation"][item_name]
-                self.assertEqual(
-                    (item["duration_minutes"], item["days_before"], item["time"]),
-                    values,
-                )
+                self.assertEqual(item["duration_minutes"], duration)
+
+        self.assertTrue(rules["m203_live_firing"]["active"])
+        self.assertTrue(rules["gpmg_live_firing"]["active"])
+        self.assertTrue(rules["ex_relentless"]["active"])
+        self.assertTrue(rules["xaw_co_uo"]["active"])
+        self.assertEqual(rules["m203_live_firing"]["timing"], "external")
+        self.assertEqual(rules["gpmg_live_firing"]["timing"], "external")
+        self.assertEqual(rules["ex_relentless"]["timing"], "external")
+        self.assertEqual(rules["xaw_co_uo"]["timing"], "in_camp")
 
         bus_rules = {
             rule["conduct_id"]: rule["bus_required"]
@@ -113,6 +137,26 @@ class ConductCatalogTests(unittest.TestCase):
         self.assertTrue(bus_rules["gpmg_live_firing"])
         self.assertTrue(bus_rules["signal_package"])
         self.assertFalse(bus_rules["xaw_co_uo"])
+
+    def test_csb_and_leo_catalogue_entries_are_available(self):
+        rules = {
+            rule["conduct_id"]: rule for rule in self.catalog["conducts"]
+        }
+
+        csb = rules["csb"]
+        self.assertEqual(csb["lesson_plan_name"], "Combat Skills Badge")
+        self.assertEqual(csb["aliases"], ["Combat Skills Badge", "csb"])
+        self.assertTrue(csb["active"])
+        self.assertEqual(csb["timing"], "in_camp")
+
+        leo = rules["leo II"]
+        self.assertEqual(leo["lesson_plan_name"], "Ex. LEO II")
+        self.assertEqual(
+            leo["exclusions"],
+            ["Inspection", "Prep", "SDL", "Brief", "Chat"],
+        )
+        self.assertTrue(leo["active"])
+        self.assertEqual(leo["timing"], "in_camp")
 
         xaw_rule = next(
             rule for rule in self.catalog["conducts"]
@@ -146,28 +190,33 @@ class ConductCatalogTests(unittest.TestCase):
         )
 
     def test_parkover_uses_previous_working_day(self):
-        self.assertEqual(
-            self.module._previous_working_day(date(2026, 10, 26)),
-            date(2026, 10, 23),
-        )
+        for conduct_day, expected in (
+            (date(2026, 10, 24), date(2026, 10, 23)),
+            (date(2026, 10, 25), date(2026, 10, 23)),
+            (date(2026, 10, 26), date(2026, 10, 23)),
+            (date(2026, 10, 27), date(2026, 10, 26)),
+        ):
+            with self.subTest(conduct_day=conduct_day):
+                self.assertEqual(
+                    self.module._previous_working_day(conduct_day), expected
+                )
 
-    def test_optional_preparation_backtrack_builds_requested_window(self):
+    def test_shared_timing_preset_builds_requested_window(self):
         rule = {
+            "active": True,
+            "timing": "external",
             "preparation": {
                 "medic": {
                     "duration_minutes": 45,
-                    "days_before": 2,
-                    "time": "04:45",
                 },
                 "ammo_collection": {
                     "duration_minutes": 30,
-                    "days_before": None,
-                    "time": "",
                 },
                 "transport": {
                     "duration_minutes": 60,
-                    "days_before": None,
-                    "time": "",
+                },
+                "vehicle": {
+                    "duration_minutes": 45,
                 },
             }
         }
@@ -176,34 +225,87 @@ class ConductCatalogTests(unittest.TestCase):
             rule,
             "2026-10-15",
             "07:00",
+            {
+                "external": {
+                    "medic": "04:45",
+                    "ammo_collection": "04:45",
+                    "transport": "06:15",
+                    "vehicle": "04:45",
+                },
+            },
+            {
+                "medic": True,
+                "ammo_collection": True,
+                "transport": True,
+                "vehicle": True,
+                "luv_hq": True,
+                "souv": True,
+                "mmrc": False,
+            },
         )
 
-        self.assertEqual(schedule[0]["start"], datetime(2026, 10, 13, 4, 45))
-        self.assertEqual(schedule[0]["end"], datetime(2026, 10, 13, 5, 30))
-        self.assertEqual(schedule[1]["start"], datetime(2026, 10, 15, 6, 30))
+        self.assertEqual(schedule[0]["start"], datetime(2026, 10, 15, 4, 45))
+        self.assertEqual(schedule[0]["end"], datetime(2026, 10, 15, 5, 30))
+        self.assertEqual(schedule[1]["start"], datetime(2026, 10, 15, 4, 45))
+        self.assertEqual(schedule[2]["start"], datetime(2026, 10, 15, 6, 15))
 
-    def test_preparation_backtrack_requires_both_day_and_time(self):
+    def test_mmrc_suppresses_ammo_and_luv_windows(self):
+        rule = {
+            "active": True,
+            "timing": "in_camp",
+            "preparation": {
+                "medic": {"duration_minutes": 0},
+                "ammo_collection": {"duration_minutes": 30},
+                "transport": {"duration_minutes": 60},
+                "vehicle": {"duration_minutes": 45},
+            },
+        }
+
+        schedule = {
+            item["item"]: item
+            for item in self.module.build_preparation_schedule(
+                rule,
+                "2026-10-15",
+                "07:00",
+                resource_flags={
+                    "medic": False,
+                    "ammo_collection": True,
+                    "transport": True,
+                    "vehicle": True,
+                    "luv_hq": True,
+                    "souv": True,
+                    "mmrc": True,
+                },
+            )
+        }
+
+        self.assertIsNone(schedule["ammo_collection"]["start"])
+        self.assertIsNone(schedule["vehicle"]["start"])
+        self.assertEqual(
+            schedule["transport"]["start"],
+            datetime(2026, 10, 15, 7, 0),
+        )
+
+    def test_invalid_timing_profile_is_rejected(self):
         catalog = {
             "conducts": [{
                 "conduct_id": "test",
                 "lesson_plan_name": "M203 L/F",
                 "aliases": ["TEST"],
                 "active": True,
+                "timing": "somewhere_else",
                 "preparation": {
                     "medic": {
                         "duration_minutes": 45,
-                        "days_before": 2,
-                        "time": "",
                     },
                     "ammo_collection": {
                         "duration_minutes": 0,
-                        "days_before": None,
-                        "time": "",
                     },
                     "transport": {
                         "duration_minutes": 0,
-                        "days_before": None,
-                        "time": "",
+                    },
+                    "vehicle": {
+                        "duration_minutes": 0,
                     },
                 },
             }]
@@ -211,7 +313,15 @@ class ConductCatalogTests(unittest.TestCase):
 
         errors = self.module.validate_conduct_catalog(catalog, ["M203 L/F"])
 
-        self.assertTrue(any("must both be set" in error for error in errors))
+        self.assertTrue(any("timing must be" in error for error in errors))
+
+    def test_active_switch_must_be_boolean(self):
+        catalog = copy.deepcopy(self.catalog)
+        catalog["conducts"][0]["active"] = "yes"
+
+        errors = self.module.validate_conduct_catalog(catalog)
+
+        self.assertTrue(any("active must be true or false" in error for error in errors))
 
     def test_catalog_does_not_require_manual_priority(self):
         self.assertTrue(
@@ -399,6 +509,25 @@ class ConductCatalogTests(unittest.TestCase):
             if rule["conduct_id"] == "lmg_qualification_shoot"
         )
         self.assertTrue(rule["active"])
+        self.assertEqual(rule["timing"], "in_camp")
+
+    def test_combat_circuit_is_active_without_a_timing_profile(self):
+        rule = next(
+            rule for rule in self.catalog["conducts"]
+            if rule["conduct_id"] == "combat_circuit"
+        )
+        self.assertTrue(rule["active"])
+        self.assertIsNone(rule["timing"])
+
+        schedule = self.module.build_preparation_schedule(
+            rule,
+            "2026-10-13",
+            "07:00",
+            resource_flags={"medic": True, "vehicle": True, "souv": True},
+        )
+        self.assertTrue(
+            all(item["start"] is None and item["end"] is None for item in schedule)
+        )
 
     def test_lesson_plan_contains_both_xaw_sections(self):
         lesson_plan = pd.read_csv(ROOT / "SIAO - Lesson Plan.csv", header=None)
@@ -447,12 +576,14 @@ class ConductCatalogTests(unittest.TestCase):
                     "lesson_plan_name": "M203 L/F",
                     "aliases": ["LOCAL NAME"],
                     "active": True,
+                    "timing": "in_camp",
                 },
                 {
                     "conduct_id": "two",
                     "lesson_plan_name": "GPMG L/F",
                     "aliases": ["LOCAL NAME"],
                     "active": True,
+                    "timing": "in_camp",
                 },
             ]
         }

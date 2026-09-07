@@ -363,12 +363,12 @@ class AIIngestionTests(unittest.TestCase):
 
         generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
         sheet = generated["(Fill In) SIAO"]
-        self.assertEqual(sheet["M13"].value, "12/Oct/2026 08:00")
-        self.assertEqual(sheet["N13"].value, "13/Oct/2026 21:00")
+        self.assertEqual(sheet["M13"].value, "12/Oct/2026 05:45")
+        self.assertEqual(sheet["N13"].value, "13/Oct/2026 18:45")
         self.assertEqual(sheet["R13"].value, "12/Oct/2026 05:30")
         self.assertEqual(sheet["S13"].value, "13/Oct/2026 22:00")
-        self.assertEqual(sheet["BQ13"].value, "12/Oct/2026 05:30")
-        self.assertEqual(sheet["BR13"].value, "13/Oct/2026 22:00")
+        self.assertEqual(sheet["BQ13"].value, "12/Oct/2026 05:45")
+        self.assertEqual(sheet["BR13"].value, "13/Oct/2026 22:15")
         self.assertEqual(sheet["CG13"].value, "-")
         self.assertEqual(sheet["CH13"].value, "-")
         self.assertEqual(sheet["BS13"].value, "-")
@@ -456,6 +456,8 @@ class AIIngestionTests(unittest.TestCase):
 
         generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
         sheet = generated["(Fill In) SIAO"]
+        self.assertEqual(sheet["M13"].value, "23/Oct/2026 04:45")
+        self.assertEqual(sheet["R13"].value, "23/Oct/2026 04:45")
         self.assertEqual(sheet["BQ13"].value, "23/Oct/2026 04:45")
         self.assertEqual(sheet["BR13"].value, "23/Oct/2026 22:30")
         self.assertEqual(sheet["CG13"].value, "23/Oct/2026 06:15")
@@ -467,7 +469,7 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(sheet["CJ13"].value, "M203 Range")
         self.assertEqual(sheet["CL13"].value, 4)
         self.assertEqual(str(sheet["BW13"].value), "1")
-        self.assertEqual(sheet["CC13"].value, "5T PARKOVER ON 221026")
+        self.assertEqual(sheet["CC13"].value, "5T + SOUV PARKOVER ON 221026")
         generated.close()
 
     def test_one_way_ne_tour_and_two_way_cougar_bus_transport(self):
@@ -498,6 +500,10 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(sheet["CH14"].value, "09/Oct/2026 18:30")
         self.assertEqual(sheet["CJ14"].value, "MMRC")
         self.assertEqual(sheet["CL14"].value, 4)
+        self.assertIn(sheet["R14"].value, (None, "-"))
+        self.assertIn(sheet["S14"].value, (None, "-"))
+        self.assertIn(sheet["BQ14"].value, (None, "-"))
+        self.assertIn(sheet["BR14"].value, (None, "-"))
         generated.close()
 
     def test_ai_events_generate_ocs_and_safti_products(self):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import os
 import re
@@ -19,6 +20,15 @@ import yaml
 
 APP_ROOT = Path(__file__).resolve().parent
 IMPORTER_PATH = APP_ROOT / "ocs" / "importer.py"
+AUTOMATION_SOURCE_PATHS = (
+    IMPORTER_PATH,
+    APP_ROOT / "ocs" / "legacy_importer.py",
+    APP_ROOT / "ocs" / "training_plan_importer.py",
+    APP_ROOT / "ocs" / "siao_extractor.py",
+    APP_ROOT / "ocs" / "conduct_catalogue.py",
+    APP_ROOT / "ocs" / "booking_service.py",
+    APP_ROOT / "ocs" / "google_forms.py",
+)
 _MODULE_LOAD_LOCK = threading.Lock()
 _SIAO_DRAFT_LOCK = threading.Lock()
 
@@ -84,14 +94,28 @@ def apply_configured_period_ranges(
 
 
 def load_automation_module() -> ModuleType:
-    """Load the numeric-directory module without changing its source file."""
-    module_name = "tp_importer"
+    """Load the current importer source without retaining a stale Streamlit copy."""
+    digest = hashlib.sha256()
+    for source_path in AUTOMATION_SOURCE_PATHS:
+        digest.update(source_path.read_bytes())
+    source_digest = digest.hexdigest()[:16]
+    module_name = f"tp_importer_{source_digest}"
     if module_name in sys.modules:
         return sys.modules[module_name]
 
     with _MODULE_LOAD_LOCK:
         if module_name in sys.modules:
             return sys.modules[module_name]
+
+        for imported_name in (
+            "ocs.booking_service",
+            "ocs.conduct_catalogue",
+            "ocs.google_forms",
+            "ocs.siao_extractor",
+            "ocs.training_plan_importer",
+            "ocs.legacy_importer",
+        ):
+            sys.modules.pop(imported_name, None)
 
         spec = importlib.util.spec_from_file_location(module_name, IMPORTER_PATH)
         if spec is None or spec.loader is None:
@@ -154,6 +178,7 @@ def prepare_automation(
         lesson_plan_path=str(lesson_plan_path),
         siao_template_path=str(template_path),
         conduct_catalog_path=str(get_conduct_catalog_path(config)),
+        timing_settings=config.get("timing", {}),
     )
     return PreparedAutomation(module=module, extractor=extractor)
 
@@ -269,6 +294,7 @@ def prepare_automation_from_events(
         lesson_plan_path=str(lesson_plan_path),
         siao_template_path=str(template_path),
         conduct_catalog_path=str(get_conduct_catalog_path(config)),
+        timing_settings=config.get("timing", {}),
     )
     return PreparedAutomation(module=module, extractor=extractor)
 
