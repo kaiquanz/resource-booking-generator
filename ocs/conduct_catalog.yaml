@@ -499,7 +499,7 @@ conducts:
     transport: {duration_minutes: 600}
     vehicle: {duration_minutes: 0}
 - conduct_id: csb
-  lesson_plan_name: Combat Skills Badge
+  lesson_plan_name: CSB
   display_name: Combat Skills Badge
   use_display_name: true
   aliases:

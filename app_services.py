@@ -23,6 +23,7 @@ IMPORTER_PATH = APP_ROOT / "ocs" / "importer.py"
 AUTOMATION_SOURCE_PATHS = (
     IMPORTER_PATH,
     APP_ROOT / "ocs" / "legacy_importer.py",
+    APP_ROOT / "ocs" / "ce_signals.py",
     APP_ROOT / "ocs" / "training_plan_importer.py",
     APP_ROOT / "ocs" / "siao_extractor.py",
     APP_ROOT / "ocs" / "conduct_catalogue.py",
@@ -114,6 +115,7 @@ def load_automation_module() -> ModuleType:
             "ocs.siao_extractor",
             "ocs.training_plan_importer",
             "ocs.legacy_importer",
+            "ocs.ce_signals",
         ):
             sys.modules.pop(imported_name, None)
 
@@ -179,6 +181,9 @@ def prepare_automation(
         siao_template_path=str(template_path),
         conduct_catalog_path=str(get_conduct_catalog_path(config)),
         timing_settings=config.get("timing", {}),
+        ce_signals_rules_path=str(resolve_configured_path(config.get("paths", {}).get(
+            "ce_signals_rules", "ocs/ce_signals.yaml"))),
+        ce_signals_settings=config.get("ce_signals", {}),
     )
     return PreparedAutomation(module=module, extractor=extractor)
 
@@ -295,6 +300,9 @@ def prepare_automation_from_events(
         siao_template_path=str(template_path),
         conduct_catalog_path=str(get_conduct_catalog_path(config)),
         timing_settings=config.get("timing", {}),
+        ce_signals_rules_path=str(resolve_configured_path(config.get("paths", {}).get(
+            "ce_signals_rules", "ocs/ce_signals.yaml"))),
+        ce_signals_settings=config.get("ce_signals", {}),
     )
     return PreparedAutomation(module=module, extractor=extractor)
 
@@ -310,7 +318,7 @@ def _run_siao_draft(
     # global while another user's workbook is being generated.
     with _SIAO_DRAFT_LOCK:
         prepared.module.data_change = prepared.extractor
-        prepared.extractor.draft_siao(cadet_size=cadet_size)
+        prepared.extractor.draft_siao(cadet_size=cadet_size, output_path=output_path)
 
     workbook_bytes = output_path.read_bytes()
     workbook = openpyxl.load_workbook(output_path, data_only=False)
@@ -323,6 +331,8 @@ def _run_siao_draft(
         "csv": csv_bytes,
         "match_report": pd.DataFrame(prepared.extractor.match_report),
         "catalog_validation_errors": prepared.extractor.catalog_validation_errors,
+        "ce_signals_bookings": getattr(prepared.extractor, "ce_signals_bookings", []),
+        "ce_signals_warnings": getattr(prepared.extractor, "ce_signals_warnings", []),
     }
 
 
@@ -332,8 +342,7 @@ def generate_siao(config: dict[str, Any], cadet_size: int) -> dict[str, bytes]:
 
     with tempfile.TemporaryDirectory(prefix="tp_siao_") as temp_dir:
         output_path = Path(temp_dir) / "draft_siao.xlsx"
-        shutil.copy2(source_template, output_path)
-        prepared = prepare_automation(config, siao_template_path=output_path)
+        prepared = prepare_automation(config, siao_template_path=source_template)
         return _run_siao_draft(prepared, output_path, cadet_size)
 
 
@@ -346,11 +355,10 @@ def generate_siao_from_events(
     source_template = _required_path(config, "siao_template")
     with tempfile.TemporaryDirectory(prefix="tp_ai_siao_") as temp_dir:
         output_path = Path(temp_dir) / "draft_siao.xlsx"
-        shutil.copy2(source_template, output_path)
         prepared = prepare_automation_from_events(
             config,
             events,
-            siao_template_path=output_path,
+            siao_template_path=source_template,
         )
         return _run_siao_draft(prepared, output_path, cadet_size)
 

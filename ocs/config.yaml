@@ -1,6 +1,7 @@
 paths:
   lesson_plan: "SIAO - Lesson Plan.csv"
   siao_template: "ocs/template_siao.xlsx"
+  ce_signals_rules: "ocs/ce_signals.yaml"
   input_data: ""
   output_folder: "outputs"
   conduct_catalog: "ocs/conduct_catalog.yaml"

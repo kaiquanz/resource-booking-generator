@@ -2,6 +2,7 @@ import io
 import contextlib
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -320,6 +321,8 @@ class AIIngestionTests(unittest.TestCase):
 
     def test_ai_events_preserve_the_automation_workbook_shape(self):
         config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        original_template_bytes = (ROOT / "ocs" / "template_siao.xlsx").read_bytes()
+        config["ce_signals"] = {"items": {"36": {"reference_quantity": 70}}}
         reviewed = event_frame([{
             "date": "2026-10-01", "start_time": "08:00", "end_time": "09:00",
             "conduct": "IPPT", "location": "CA1", "remarks": "",
@@ -327,6 +330,8 @@ class AIIngestionTests(unittest.TestCase):
         }])
         with contextlib.redirect_stdout(io.StringIO()):
             result = generate_siao_from_events(config, reviewed, cadet_size=120)
+
+        self.assertEqual((ROOT / "ocs" / "template_siao.xlsx").read_bytes(), original_template_bytes)
 
         template = openpyxl.load_workbook(ROOT / "ocs" / "template_siao.xlsx")
         roundtrip_bytes = io.BytesIO()
@@ -338,6 +343,13 @@ class AIIngestionTests(unittest.TestCase):
         for sheet_name in automation_baseline.sheetnames:
             expected = automation_baseline[sheet_name]
             actual = generated[sheet_name]
+            if sheet_name == "(Fill In) CE & Signals":
+                # This calendar is now generated for the supplied schedule,
+                # including the new Others/generator rows.
+                self.assertEqual(actual.max_row, 127)
+                self.assertEqual(actual["A1"].value, datetime(2026, 10, 1))
+                self.assertEqual(actual["D36"].value, 60)  # Saved settings reach AI output.
+                continue
             self.assertEqual(actual.max_row, expected.max_row)
             self.assertEqual(actual.max_column, expected.max_column)
             self.assertEqual(

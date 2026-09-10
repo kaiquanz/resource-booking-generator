@@ -1,0 +1,67 @@
+version: 1
+base_cadets: 140
+sheet_name: "(Fill In) CE & Signals"
+# Exact fractions, not rounded decimal ratios. Round UP only after scaling.
+# Quantities are the filled booking cells in the reference photos, not Default.
+# Date offsets reproduce the reference plan; they are editable assumptions,
+# not independently confirmed issue/return policies.
+anchors:
+  xaw_stores: {pattern: 'PREP FOR XAW|XAW.*STORES', occurrence: first}
+  uo: {pattern: '\bUO DRILLS\b', occurrence: first}
+  ptco: {pattern: 'PTCO.*TRUNCHEON|TACTICAL SCENARIO TRG', occurrence: first}
+  lmg_start: {pattern: '\bLMG\b.*(SDL|F2F|THT|ASR)', occurrence: first}
+  lmg_shoot: {pattern: '\bLMG\b.*(QUALIFICATION SHOOT|L/F|LIVE FIRING)', occurrence: last}
+  relentless: {pattern: '^EX\.? RELENTLESS(?: WARRIOR)?$', occurrence: first}
+  gpmg_shoot: {pattern: '^GPMG (L/F|LF|LIVE FIRING)$', occurrence: last}
+  dekitting: {pattern: 'DEKITTING|DE-KITTING', occurrence: last}
+windows:
+  course: {start: course_start, end: dekitting, end_fallback: course_end, standing: true}
+  uoce: {start: xaw_stores, end: ptco, end_offset: 7, requires: [uo]}
+  heartlanders: {start: xaw_stores, end: ptco, end_offset: 7}
+  field_support: {start: xaw_stores, end: gpmg_shoot, end_offset: 6}
+  lmg: {start: lmg_start, start_offset: -1, end: lmg_shoot}
+  mcn: {start: lmg_shoot, end: gpmg_shoot, end_offset: 6}
+  gpmg: {start: gpmg_shoot, start_offset: -4, end: gpmg_shoot, end_offset: 6}
+  diesel: {start: relentless, start_offset: -3, end: gpmg_shoot, end_offset: 4}
+items:
+  - {name: PRC 940, row: 13, reference_quantity: 20, per_cadet: '20/140', window: field_support}
+  - {name: DIPOLE, row: 14, reference_quantity: 20, per_cadet: '20/140', window: field_support}
+  - {name: AM78, row: 15, reference_quantity: 4, per_cadet: '4/140', window: field_support}
+  - {name: VRC 947, row: 16, reference_quantity: 2, per_cadet: '2/140', window: field_support}
+  - {name: MCN, row: 21, reference_quantity: 15, per_cadet: '15/140', window: mcn}
+  - {name: COMPASS MAGNETIC, row: 36, reference_quantity: 140, per_cadet: '140/140', window: course}
+  - {name: LMG BORELIGHT, row: 39, reference_quantity: 6, per_cadet: '6/140', window: lmg}
+  - {name: XTREK GPS, row: 40, reference_quantity: 10, per_cadet: '10/140', window: field_support}
+  - {name: IN-REACH GPS, row: 41, reference_quantity: 70, per_cadet: '70/140', window: field_support}
+  - {name: NIGHTHAWK, row: 44, reference_quantity: 8, per_cadet: '8/140', window: gpmg}
+  - {name: KEYHOLE SENSOR, row: 61, reference_quantity: 12, per_cadet: '12/140', window: uoce}
+  - {name: TACTICAL THROWING SENSOR, row: 62, reference_quantity: 12, per_cadet: '12/140', window: uoce}
+  - {name: FORWARD SENSOR SYSTEM, row: 63, reference_quantity: 4, per_cadet: '4/140', window: uoce}
+  - {name: ROUND CORNER SENSOR, row: 64, reference_quantity: 12, per_cadet: '12/140', window: uoce}
+  - {name: 'HORN,LOUDSPEAKER: PORTABLE', row: 68, reference_quantity: 7, per_cadet: '7/140', window: heartlanders}
+  - {name: 'SHIELD, PERSONAL PROTECTIVE', row: 69, reference_quantity: 21, per_cadet: '21/140', window: heartlanders}
+  - {name: 'BATON, TELESCOPIC: W/HANDLE STRAP', row: 70, reference_quantity: 19, per_cadet: '19/140', window: heartlanders}
+  - {name: 'SIGN: STOP, DETACHABLE', row: 71, reference_quantity: 4, per_cadet: '4/140', window: heartlanders}
+  - {name: CONCERTINA WIRE SUPPORT STAND, row: 72, reference_quantity: 12, per_cadet: '12/140', window: heartlanders}
+  - {name: 'DETECTOR, HAND-HELD: DETECTS METALS', row: 73, reference_quantity: 4, per_cadet: '4/140', window: heartlanders}
+  - {name: 'MIRROR, INSPECTION: F/UNDERCARRIAGE VEH', row: 74, reference_quantity: 4, per_cadet: '4/140', window: heartlanders}
+  - {name: 'ROAD SPIKES, TRAINING: 200 RUBBER SPIKES', row: 75, reference_quantity: 2, per_cadet: '2/140', window: heartlanders}
+  - {name: 'HAMMER, HAND: MATT BLACK, 90CM LG', row: 76, reference_quantity: 12, per_cadet: '12/140', window: heartlanders}
+  - {name: 'CUTTER, BOLT: MATT BLACK, 70CM LG', row: 77, reference_quantity: 12, per_cadet: '12/140', window: heartlanders}
+  - {name: 'CROWBAR: MATT BLACK, 20 IN. LG', row: 78, reference_quantity: 12, per_cadet: '12/140', window: heartlanders}
+  - {name: 'MIRROR, INSPECTION: F/TELESCOPIC', row: 79, reference_quantity: 5, per_cadet: '5/140', window: heartlanders}
+  - {name: Diesel, row: 116, reference_quantity: 20, per_cadet: '20/140', window: diesel, unit: L, scaling: fixed}
+  # User confirmed generator has the same window as diesel.
+  - {name: Generator, row: 127, reference_quantity: 1, per_cadet: '1/140', window: diesel, scaling: fixed}
+# Retain photo values without assigning them to LANCER (user: no equipment).
+# These records are excluded from generation until their activity is identified.
+unassigned_reference_bookings:
+  - start: '2026-11-22'
+    end: null
+    reason: 'Activity unconfirmed; explicitly not LANCER.'
+    quantities:
+      PRC 940: {reference_quantity: 20, per_cadet: '20/140'}
+      DIPOLE: {reference_quantity: 20, per_cadet: '20/140'}
+      AM78: {reference_quantity: 4, per_cadet: '4/140'}
+      VRC 947: {reference_quantity: 3, per_cadet: '3/140'}
+      MCN: {reference_quantity: 10, per_cadet: '10/140'}

@@ -26,7 +26,7 @@ class SIAOPage:
         left, right = st.columns([1, 1.45], gap="large")
         with left:
             cadet_size = st.number_input(
-                "Cadet strength", min_value=1, max_value=2000, value=120, step=1
+                "Cadet strength", min_value=1, max_value=2000, value=140, step=1
             )
             if (
                 "siao_result" in st.session_state
@@ -108,6 +108,15 @@ class SIAOPage:
         for error in result.get("catalog_validation_errors", []):
             st.warning(error)
 
+        for message in result.get("ce_signals_warnings", []):
+            st.warning(message)
+        bookings = result.get("ce_signals_bookings", [])
+        if bookings:
+            with st.expander("CE & Signals bookings"):
+                st.caption("Quantities and date buffers use your saved CE & Signals settings. Scaled quantities round up; fixed quantities stay unchanged.")
+                st.dataframe(pd.DataFrame(bookings)[["name", "quantity", "start", "end"]],
+                             use_container_width=True, hide_index=True)
+
         st.subheader("Downloads")
         download_one, download_two = st.columns(2)
         with download_one:
@@ -126,4 +135,3 @@ class SIAOPage:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
-

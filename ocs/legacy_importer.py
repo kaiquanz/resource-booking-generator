@@ -17,6 +17,7 @@ import zipfile
 from collections import defaultdict
 from datetime import datetime, timedelta
 from html import escape
+from pathlib import Path
 from urllib.parse import urlencode
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -30,6 +31,7 @@ import yaml
 import smtplib
 from openpyxl.styles import PatternFill
 from openpyxl.utils import column_index_from_string
+from ocs.ce_signals import fill_ce_signals
 
 # ---------------------------------------------------------------------------
 # Editable conduct catalogue
@@ -1467,11 +1469,13 @@ class Importer:
 class Extractor:
     def __init__(self, data: pd.DataFrame, extract_columns=None, lesson_plan_path=None,
                  siao_template_path=None, conduct_catalog_path=None,
-                 timing_settings=None):
+                 timing_settings=None, ce_signals_rules_path=None, ce_signals_settings=None):
         self.data = data
         self.extract_columns = extract_columns
         self.lesson_plan_path = lesson_plan_path
         self.siao_template_path = siao_template_path
+        self.ce_signals_rules_path = ce_signals_rules_path
+        self.ce_signals_settings = ce_signals_settings
         self.conduct_catalog_path = conduct_catalog_path or DEFAULT_CONDUCT_CATALOG_PATH
         self.conduct_catalog = load_conduct_catalog(self.conduct_catalog_path)
         self.timing_settings = normalize_timing_settings(timing_settings)
@@ -1543,7 +1547,17 @@ class Extractor:
             lesson_names,
         )
 
-    def draft_siao(self, cadet_size: int):
+    def draft_siao(self, cadet_size: int, output_path=None):
+        # Templates are always read-only inputs, including direct legacy calls.
+        destination = Path(output_path) if output_path is not None else (
+            Path(__file__).resolve().parents[1] / "outputs" / "draft_siao.xlsx"
+        )
+        source = Path(self.siao_template_path)
+        if destination.resolve() == source.resolve() or (
+            destination.exists() and source.exists() and destination.samefile(source)
+        ):
+            raise ValueError("SIAO output must be a separate copy, not the main template")
+        destination.parent.mkdir(parents=True, exist_ok=True)
         self.extract()
         self.read_lesson_plan()
         conduct_mapping = self.conduct_list()
@@ -1905,7 +1919,12 @@ class Extractor:
 
                 start_row += 1
 
-        wb.save(template_path)
+        self.ce_signals_bookings, self.ce_signals_warnings = fill_ce_signals(
+            wb, self.conducts, cadet_size, self.ce_signals_rules_path, self.ce_signals_settings
+        )
+        wb.save(destination)
+        self.siao_output_path = str(destination)
+        wb.close()
 
     def conduct_list(self):
         conduct_list = self.conducts

@@ -86,6 +86,35 @@ ambiguous, meaningful numbers such as `4KM` are preserved, and unresolved
 timetable entries are shown after SIAO generation instead of being silently
 discarded.
 
+## CE & Signals allocations
+
+The SIAO generator fills `(Fill In) CE & Signals` in the workbook selected by
+`paths.siao_template`. Both the legacy TP importer and reviewed AI events use
+the same rules. The main template is never overwritten. The app generates a
+downloadable copy; direct `Extractor.draft_siao` calls save to
+`outputs/draft_siao.xlsx` or an explicit, separate `output_path`.
+
+Project defaults are stored in `ocs/ce_signals.yaml`, selected by
+`paths.ce_signals_rules` in `ocs/config.yaml`. Equipment quantities use exact
+fractions of the 140-cadet reference, with rounding up after scaling. Diesel is
+fixed at 20 L and generator at 1, sharing the Relentless-through-GPMG window.
+Compasses stay allocated through the last dekitting day. LANCER does not
+trigger equipment allocations. Unassigned late-November radio/MCN quantities
+are retained in the rules file but are not scheduled.
+
+Open **Settings → CE & Signals** to edit baseline cadets, quantities, fixed or
+scaled allocation, and booking activities/date offsets. Changes are saved as
+compact `ce_signals` overrides in browser settings and included in **Download
+local config**; the shared project defaults are not overwritten. Generate a
+fresh SIAO draft after saving. **Reset to config.yaml** restores project defaults.
+
+Booking offsets reproduce the supplied October/November reference windows;
+they are editable assumptions, not confirmed issue/return policies. Activities
+are matched in the unfiltered training timetable so dekitting and unmatched
+lessons remain available. Missing activity anchors produce review messages
+rather than fabricated dates. A missing dekitting date falls back to the last
+date supplied in the timetable and is reported in the app.
+
 ## Hosting notes
 
 Streamlit needs a continuously running Python service and a WebSocket connection.

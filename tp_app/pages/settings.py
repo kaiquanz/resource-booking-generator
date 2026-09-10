@@ -12,6 +12,7 @@ import yaml
 from app_services import resolve_configured_path
 from tp_app.context import AI_STATE_KEYS, OUTPUT_STATE_KEYS, ApplicationContext
 from tp_app.ui_helpers import render_page_header
+from tp_app.ce_signals_settings import render_ce_settings
 
 
 class SettingsPage:
@@ -28,7 +29,7 @@ class SettingsPage:
         )
         section = st.radio(
             "Settings section",
-            ["Lesson settings", "Timing settings", "General settings"],
+            ["Lesson settings", "Timing settings", "CE & Signals", "General settings"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -36,6 +37,8 @@ class SettingsPage:
             self._render_lesson_settings()
         elif section == "Timing settings":
             self._render_timing_settings()
+        elif section == "CE & Signals":
+            render_ce_settings(self.context)
         else:
             self._render_general_settings()
         self._render_reset_and_export()
@@ -302,4 +305,3 @@ class SettingsPage:
         return bool(
             re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", str(value).strip())
         )
-
