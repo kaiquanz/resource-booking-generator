@@ -1012,11 +1012,9 @@ OCS_FACILITIES = {
 }
 
 SAFTI_FACILITIES = {
-    "Rambutan Hill": ["RAMBUTAN HILL", "RAMBUTAN"],
     "SOC Ground": ["SOC GROUND"],
     "Rugby Field": ["RUGBY FIELD"],
     "Warrior's Hall (WH)": ["WARRIOR'S HALL", "WARRIORS HALL", "WH"],
-    "PLC IGTS": ["PLC IGTS"],
     "Stadium": ["STADIUM"],
 }
 
