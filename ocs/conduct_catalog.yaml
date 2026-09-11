@@ -167,7 +167,7 @@ conducts:
     medic: {duration_minutes: 0}
     ammo_collection: {duration_minutes: 810}
     transport: {duration_minutes: 690}
-    vehicle: {duration_minutes: 420}
+    vehicle: {duration_minutes: 0}
 - conduct_id: xaw_co_uo
   lesson_plan_name: Ex Adaptive Warrior ( CO + UO)
   display_name: Ex Adaptive Warrior ( CO + UO)
