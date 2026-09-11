@@ -505,8 +505,8 @@ class AIIngestionTests(unittest.TestCase):
         generated = openpyxl.load_workbook(io.BytesIO(result["xlsx"]), data_only=False)
         sheet = generated["(Fill In) SIAO"]
         self.assertEqual(sheet["C13"].value, "NE TOUR")
-        self.assertEqual(sheet["CG13"].value, "08/Oct/2026 08:30")
-        self.assertEqual(sheet["CH13"].value, "-")
+        self.assertIsNone(sheet["CG13"].value)
+        self.assertEqual(sheet["CH13"].value, "08/Oct/2026 11:30")
         self.assertEqual(sheet["C14"].value, "Ex. COUGAR")
         self.assertEqual(sheet["CG14"].value, "09/Oct/2026 07:00")
         self.assertEqual(sheet["CH14"].value, "09/Oct/2026 18:30")

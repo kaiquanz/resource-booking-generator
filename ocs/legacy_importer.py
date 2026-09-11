@@ -1847,6 +1847,11 @@ class Extractor:
                         if use_catalog_window
                         else _siao_datetime(end_date, activity_end_time)
                     )
+                    if conduct_id == "ne_tour":
+                        transport_start = None
+                        transport_end = _siao_datetime(start_date, "11:30")
+                        if "transport_start" in output_columns:
+                            ws.cell(start_row, output_columns["transport_start"]).value = None
                     if (
                         transport_start is not None
                         and "transport_start" in output_columns
@@ -1857,7 +1862,7 @@ class Extractor:
                             value=transport_start.strftime(SIAO_DATETIME_FORMAT),
                         )
                     if (
-                        two_way_bus
+                        (two_way_bus or one_way_bus)
                         and transport_end is not None
                         and "transport_end" in output_columns
                     ):
