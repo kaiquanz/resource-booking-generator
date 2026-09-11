@@ -465,7 +465,7 @@ conducts:
   - Calibration
   - Fireside
   - JVLF
-  - Rehearsals
+  - Rehearsal
   multi_day: false
   active: true
   timing: in_camp
@@ -505,7 +505,18 @@ conducts:
   aliases:
   - Combat Skills Badge
   - csb
-  exclusions: []
+  exclusions: 
+  - Recce
+  - Chat
+  - Prep
+  - Inspection
+  - SDL
+  - Brief
+  - Calibration
+  - Fireside
+  - JVLF
+  - Rehearsal
+  - Refresher
   multi_day: false
   active: true
   timing: in_camp
