@@ -541,6 +541,19 @@ class AIIngestionTests(unittest.TestCase):
         self.assertEqual(result["email_draft"]["to"], "reviewer@example.com")
         self.assertIn("<table", result["email_draft"]["table_html"])
 
+    def test_mmrc_is_not_a_safti_facility_booking(self):
+        config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
+        reviewed = event_frame([{
+            "date": "2026-10-19", "start_time": "08:00", "end_time": "09:00",
+            "conduct": "LMG Qualification Shoot", "location": location, "remarks": "",
+            "source_reference": "page 1", "confidence": 1.0, "needs_review": False,
+        } for location in ("MMRC", "MMRC 100m Range 1 & 2", "Stadium")])
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = generate_bookings_from_events(config, reviewed)
+        self.assertEqual(list(result["safti"]["FACILITY"]), ["Stadium"])
+        self.assertTrue(result["ocs"].empty)
+        self.assertNotIn("MMRC", result["email_copy_text"])
+
     def test_ai_bookings_without_recipient_create_copyable_email_draft(self):
         config = yaml.safe_load((ROOT / "ocs" / "config.yaml").read_text(encoding="utf-8"))
         config["user"]["email"] = ""

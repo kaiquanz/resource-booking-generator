@@ -46,7 +46,7 @@ class SIAOPage:
                         "issue(s). Check the generated SIAO carefully."
                     )
             if st.button(
-                "Generate SIAO draft", type="primary", use_container_width=True
+                "Generate SIAO draft", type="primary", width='stretch'
             ):
                 self.context.clear_state(("siao_result", "siao_result_cadet_size"))
                 result = run_action(
@@ -103,7 +103,7 @@ class SIAOPage:
                 st.warning(
                     "Some timetable entries were not placed into the SIAO. Review them before using the draft."
                 )
-                st.dataframe(review_rows, use_container_width=True, hide_index=True)
+                st.dataframe(review_rows, width='stretch', hide_index=True)
 
         for error in result.get("catalog_validation_errors", []):
             st.warning(error)
@@ -115,7 +115,7 @@ class SIAOPage:
             with st.expander("CE & Signals bookings"):
                 st.caption("Quantities and date buffers use your saved CE & Signals settings. Scaled quantities round up; fixed quantities stay unchanged.")
                 st.dataframe(pd.DataFrame(bookings)[["name", "quantity", "start", "end"]],
-                             use_container_width=True, hide_index=True)
+                             width='stretch', hide_index=True)
 
         st.subheader("Downloads")
         download_one, download_two = st.columns(2)
@@ -125,7 +125,7 @@ class SIAOPage:
                 result["csv"],
                 file_name="draft_siao.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width='stretch',
             )
         with download_two:
             st.download_button(
@@ -133,5 +133,5 @@ class SIAOPage:
                 result["xlsx"],
                 file_name="draft_siao.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width='stretch',
             )

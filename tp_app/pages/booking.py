@@ -73,7 +73,7 @@ class BookingPage:
             st.code(result["ocs_copy_text"], language=None)
             st.dataframe(
                 booking_table_for_display(result["ocs"]),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 column_config=BOOKING_DATE_COLUMNS,
             )
@@ -117,7 +117,7 @@ class BookingPage:
             )
         st.dataframe(
             booking_table_for_display(result["safti"]),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config=BOOKING_DATE_COLUMNS,
         )

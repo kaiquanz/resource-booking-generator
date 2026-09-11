@@ -149,7 +149,7 @@ class SettingsPage:
                     file_name=configured_path.name,
                     mime=self.context.download_mime_type(configured_path),
                     key=f"file_download_{key}",
-                    use_container_width=True,
+                    width='stretch',
                 )
                 st.caption(configured_path.name)
             else:
@@ -157,7 +157,7 @@ class SettingsPage:
                     "Current file unavailable",
                     key=f"file_download_unavailable_{key}",
                     disabled=True,
-                    use_container_width=True,
+                    width='stretch',
                 )
 
     def _render_timing_settings(self) -> None:
@@ -285,7 +285,7 @@ class SettingsPage:
         st.divider()
         reset_col, export_col = st.columns(2)
         with reset_col:
-            if st.button("Reset to config.yaml", use_container_width=True):
+            if st.button("Reset to config.yaml", width='stretch'):
                 self.context.reset_config()
                 st.rerun()
         with export_col:
@@ -297,7 +297,7 @@ class SettingsPage:
                 yaml.safe_dump(downloadable_config, sort_keys=False),
                 file_name="config.yaml",
                 mime="application/x-yaml",
-                use_container_width=True,
+                width='stretch',
             )
 
     @staticmethod

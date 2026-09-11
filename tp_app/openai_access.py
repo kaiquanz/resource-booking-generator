@@ -70,17 +70,17 @@ class OpenAIKeyManager:
         link_one.link_button(
             "Create or manage a key",
             OPENAI_API_KEYS_URL,
-            use_container_width=True,
+            width='stretch',
         )
         link_two.link_button(
             "Official setup guide",
             OPENAI_KEY_HELP_URL,
-            use_container_width=True,
+            width='stretch',
         )
         if forget_col.button(
             "Forget key",
             disabled=not bool(st.session_state.get(self.input_state_key)),
-            use_container_width=True,
+            width='stretch',
         ):
             self.forget_personal_key()
             st.rerun()

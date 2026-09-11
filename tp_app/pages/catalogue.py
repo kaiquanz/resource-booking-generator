@@ -46,7 +46,7 @@ class CataloguePage:
         edited_frame = st.data_editor(
             self.mapper.to_frame(catalog),
             num_rows="dynamic",
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config=self._column_config(),
             key="conduct_catalog_editor",
@@ -69,7 +69,7 @@ class CataloguePage:
                 "Save validated catalogue",
                 type="primary",
                 disabled=bool(validation_errors),
-                use_container_width=True,
+                width='stretch',
             ):
                 saved_path = run_action(
                     lambda: save_editable_conduct_catalog(
@@ -85,7 +85,7 @@ class CataloguePage:
                 yaml.safe_dump(edited_catalog, sort_keys=False, allow_unicode=True),
                 file_name="conduct_catalog.yaml",
                 mime="application/x-yaml",
-                use_container_width=True,
+                width='stretch',
             )
         st.caption(
             "On a hosted server, use persistent storage or a database if these edits must survive redeployment."

@@ -96,7 +96,7 @@ def render_ce_settings(context):
                                value=int(rules["base_cadets"]), step=1)
         st.caption("Scaled quantity = baseline quantity × current cadets ÷ baseline cadets, rounded up. Fixed quantities stay unchanged.")
         item_frame, window_frame = settings_frames(rules)
-        items = st.data_editor(item_frame, hide_index=True, num_rows="fixed", use_container_width=True,
+        items = st.data_editor(item_frame, hide_index=True, num_rows="fixed", width='stretch',
             disabled=["Equipment"], key="ce_items_editor",
             column_config={
                 "Baseline quantity": st.column_config.NumberColumn(min_value=0, step=1, required=True),
@@ -105,7 +105,7 @@ def render_ce_settings(context):
             })
         st.markdown("**Booking periods**")
         st.caption("Negative offsets start earlier; positive offsets end later. For example, -3 starts three days before the selected activity. Missing required activities leave the booking blank.")
-        windows = st.data_editor(window_frame, hide_index=True, num_rows="fixed", use_container_width=True,
+        windows = st.data_editor(window_frame, hide_index=True, num_rows="fixed", width='stretch',
             disabled=["Booking"], key="ce_windows_editor",
             column_config={
                 "Start activity": st.column_config.SelectboxColumn(options=list(ACTIVITIES.values()), required=True),

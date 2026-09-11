@@ -71,7 +71,7 @@ class AIReaderPage:
             "Extract editable schedule with AI",
             type="primary",
             disabled=source_path is None or not key_status.value,
-            use_container_width=True,
+            width='stretch',
         ):
             self.context.clear_state(AI_STATE_KEYS)
             extraction = run_action(
@@ -130,7 +130,7 @@ class AIReaderPage:
             extraction["events"],
             num_rows="dynamic",
             height=480,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             key="ai_event_editor",
             column_order=EVENT_COLUMNS,
@@ -229,7 +229,7 @@ class AIReaderPage:
                 "Approve and use this schedule",
                 type="primary",
                 disabled=bool(event_errors),
-                use_container_width=True,
+                width='stretch',
             ):
                 self._approve(cleaned_events, review_hash)
                 st.success(
@@ -240,7 +240,7 @@ class AIReaderPage:
                 if st.button(
                     "⚠ Approve with issues",
                     disabled=cleaned_events.empty,
-                    use_container_width=True,
+                    width='stretch',
                 ):
                     self._approve(cleaned_events, review_hash, event_errors)
                     st.warning(
@@ -252,7 +252,7 @@ class AIReaderPage:
                 cleaned_events.to_csv(index=False).encode("utf-8-sig"),
                 file_name="reviewed_training_plan.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width='stretch',
             )
 
         if "approved_ai_events" in st.session_state:
@@ -265,7 +265,7 @@ class AIReaderPage:
                     f"This active schedule has {len(unresolved)} unresolved issue(s). "
                     "Output generation may fail for incomplete rows."
                 )
-            if st.button("Stop using this AI schedule", use_container_width=True):
+            if st.button("Stop using this AI schedule", width='stretch'):
                 self.context.clear_state(
                     (
                         "approved_ai_events",
